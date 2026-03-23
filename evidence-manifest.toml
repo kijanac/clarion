@@ -1,0 +1,25 @@
+# evidence-manifest.toml
+#
+# Declares UI evidence requirements for critical changes.
+# Agents produce evidence files in evidence/; check_evidence.py validates them.
+#
+# Each key under [requirements] becomes a required entry in evidence/<key>.json.
+# The value is a human-readable description of what must be proven.
+#
+# Evidence JSON schema (produced by agents):
+#   {
+#     "key": "login_flow",
+#     "sha": "abc1234",
+#     "timestamp": "2026-02-24T20:00:00Z",
+#     "description": "User can log in and reach the dashboard",
+#     "steps": ["opened /login", "filled email", "clicked submit", "verified dashboard loaded"],
+#     "result": "pass"
+#   }
+
+[requirements]
+# key = human-readable description of what must be proven
+# Each key becomes a required entry in evidence/<key>.json
+
+# Example (uncomment and customize):
+# login_flow = "User can log in and reach the dashboard"
+# orders_page = "Orders page loads with at least one order visible"

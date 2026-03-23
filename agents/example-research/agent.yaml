@@ -1,0 +1,43 @@
+# Example research agent configuration.
+# This file is parsed by the platform. The agent (LLM) never sees it.
+
+meta:
+  name: Semiconductor Supply Chain Research
+  description: Semiconductor supply chain intelligence
+  owner: policy-team
+  version: 1
+
+template: research
+
+schedule:
+  default: "0 6 * * 1"          # every Monday at 06:00
+  timezone: America/New_York
+
+database:
+  enabled: true
+
+outputs:
+  - name: weekly-briefing
+    description: Weekly intelligence briefing on semiconductor supply chain
+    trigger: scheduled
+    type: telegram
+    destination: "${TELEGRAM_CHAT_ID}"
+    format: |
+      Produce a concise briefing covering:
+      1. Top developments since last briefing (max 5)
+      2. What changed vs what was expected
+      3. One-paragraph outlook
+
+      Lead with implications, not events. Your audience is senior
+      policy staff — they don't need things explained from scratch.
+
+  - name: breaking-alert
+    description: Urgent development that warrants immediate attention
+    trigger: agent_decides
+    type: telegram
+    destination: "${TELEGRAM_CHAT_ID}"
+    format: |
+      One paragraph: what happened, why it matters, what to watch.
+      Only trigger this for genuinely significant developments.
+
+resources: {}

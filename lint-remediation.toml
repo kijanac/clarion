@@ -1,0 +1,38 @@
+# lint-remediation.toml
+#
+# Maps tool error codes to project-specific remediation guidance.
+# Used by scripts/annotate_lint.py to append context to lint output.
+#
+# Each section is a tool name. Each key within is an error code.
+# The value is the message appended when that code appears in output.
+#
+# Add project-specific entries after bootstrapping. The starter rules
+# below cover common ruff and ty codes with harness-relevant guidance.
+
+[ruff]
+BLE001 = "Catch the specific exception for this integration, not bare Exception. See core-beliefs.md for the exception type per service."
+E501 = "Line too long. Prefer breaking at logical boundaries (after comma, before operator). Max is 100 chars (see pyproject.toml)."
+F401 = "Unused import. Remove it, or if re-exporting, add to __all__."
+F841 = "Local variable assigned but never used. Remove the assignment or prefix with _ if intentionally unused."
+I001 = "Imports are unsorted. Run `just lint-fix` to auto-fix."
+B006 = "Mutable default argument. Use None as default and assign inside the function body."
+B007 = "Loop variable not used. Prefix with _ (e.g., `for _ in range(n)`)."
+UP035 = "Deprecated import. Use the stdlib replacement shown in the ruff message."
+RUF015 = "Unnecessary iterable allocation. Use next(iter(...)) instead of list(...)[0]."
+
+[ty]
+# ty error codes are descriptive strings, not numbers.
+# Match on the prefix that appears in ty output.
+unresolved-import = "Check that the module is installed and listed in pyproject.toml dependencies."
+invalid-argument-type = "Verify the function signature. Use typed boundaries — no raw dicts past the adapter layer."
+
+[check_layers]
+# check_layers.py already includes remediation in its messages.
+# Add overrides here only if you need project-specific guidance
+# beyond the default "move the dependency to a lower layer" message.
+
+[check_todos]
+# check_todos.py is informational. No remediation codes needed.
+
+[check_doc_freshness]
+# check_doc_freshness.py is informational. No remediation codes needed.

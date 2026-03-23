@@ -1,0 +1,17 @@
+# risk-tiers.toml
+#
+# Machine-readable risk classification contract.
+# Maps file glob patterns to risk tiers, and tiers to required CI checks.
+# Consumed by check_risk.py to classify PRs by risk level.
+#
+# Customize the patterns below for your project's critical paths.
+
+[tiers]
+critical = ["**/migrations/**", "src/**/models.py", "src/**/auth/**"]
+high = ["src/**/api/**", "src/**/gateway/**", ".github/workflows/**"]
+normal = ["**"]
+
+[policy]
+critical = ["secondary-review", "browser-evidence"]
+high = ["secondary-review"]
+normal = []

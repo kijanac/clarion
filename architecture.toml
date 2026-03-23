@@ -1,0 +1,47 @@
+# Clarion Architecture Layer Definitions
+#
+# Modules in lower layers cannot import from higher layers.
+# Modules in the same layer can import from each other.
+# Higher layers can import from any lower layer.
+
+package = "clarion"
+
+[layers]
+foundation = 0      # models, logging, validation, state, secrets
+algorithms = 1      # tools, llm client, background tasks
+runtime = 2         # agent loop, prompt assembly
+scheduler = 3       # daemon, agent registry (Phase 2)
+adapters = 4        # telegram, email, webhook delivery
+entrypoints = 5     # CLI, daemon main
+
+[modules]
+# foundation
+models = "foundation"
+logging = "foundation"
+boundary_validation = "foundation"
+secret_store = "foundation"
+agent_state = "foundation"
+cron_state = "foundation"
+cron_scheduler = "foundation"
+cancellation = "foundation"
+agent_config = "foundation"
+
+# algorithms
+tools = "algorithms"
+tool_registry = "algorithms"
+llm_client = "algorithms"
+background_tasks = "algorithms"
+
+# runtime
+agent_runner = "runtime"
+prompt_assembly = "runtime"
+
+# scheduler (Phase 2)
+agent_registry = "scheduler"
+daemon = "scheduler"
+
+# adapters
+telegram_adapter = "adapters"
+
+# entrypoints
+cli = "entrypoints"
