@@ -8,7 +8,6 @@ import os
 import re
 import time
 from collections.abc import Mapping, Sequence
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -291,22 +290,15 @@ async def perplexity_web_search(
 async def resolve_search(
     query: str,
     *,
-    workspace_root: Path | None = None,
-    agent_id: str = "",
     ddg_rate_limiter: DdgRateLimiter | None = None,
 ) -> str:
     """Pick the best available search provider and run the query."""
-    if workspace_root and agent_id:
-        perplexity_key = load_secret(agent_id, "perplexity_search", workspace_root)
-        if perplexity_key:
-            return await perplexity_web_search(query, api_key=perplexity_key)
-        key = load_secret(agent_id, "brave_search", workspace_root)
-        if key:
-            return await brave_web_search(query, api_key=key)
-    if os.environ.get("PERPLEXITY_API_KEY", ""):
-        return await perplexity_web_search(query)
-    if os.environ.get("BRAVE_API_KEY", ""):
-        return await brave_web_search(query)
+    perplexity_key = load_secret("perplexity_api_key")
+    if perplexity_key:
+        return await perplexity_web_search(query, api_key=perplexity_key)
+    brave_key = load_secret("brave_api_key")
+    if brave_key:
+        return await brave_web_search(query, api_key=brave_key)
     return await ddg_web_search(query, rate_limiter=ddg_rate_limiter)
 
 
@@ -337,8 +329,6 @@ class WebSearchHandler(ToolHandler):
     ) -> ToolResult:
         text = await resolve_search(
             str(arguments["query"]),
-            workspace_root=ctx.workspace_root,
-            agent_id=ctx.agent_id,
             ddg_rate_limiter=self._ddg_rate_limiter,
         )
         return ToolResult(text=text, wraps_untrusted_content=True)

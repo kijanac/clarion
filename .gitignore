@@ -12,6 +12,14 @@ build/
 # Runtime data — agent databases, cron state, run history, missions
 data/
 
+# Frontend
+web/node_modules/
+web/dist/
+src/clarion/static/
+
+# Deploy secrets
+deploy/group_vars/all/secrets.yml
+
 # IDE
 .idea/
 .vscode/

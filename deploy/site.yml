@@ -1,0 +1,5 @@
+---
+- name: Deploy Clarion daemon
+  hosts: clarion
+  roles:
+    - clarion

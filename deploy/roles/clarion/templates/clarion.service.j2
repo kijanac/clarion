@@ -1,0 +1,25 @@
+[Unit]
+Description=Clarion Intelligence Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=clarion
+Group=clarion
+WorkingDirectory=/opt/clarion
+EnvironmentFile=/opt/clarion/.env
+ExecStart=/opt/clarion/.venv/bin/clarion daemon --json-logs
+Restart=on-failure
+RestartSec=10
+WatchdogSec=300
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/clarion/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

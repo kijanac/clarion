@@ -1,0 +1,9 @@
+---
+- name: reload systemd
+  systemd:
+    daemon_reload: true
+
+- name: restart clarion
+  systemd:
+    name: clarion
+    state: restarted

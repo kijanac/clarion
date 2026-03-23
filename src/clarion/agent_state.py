@@ -7,7 +7,9 @@ from pathlib import Path
 
 import structlog
 
-from clarion.models import AgentRun
+import json
+
+from clarion.models import AgentRun, ConversationTurn
 
 log = structlog.get_logger()
 
@@ -44,6 +46,31 @@ def last_run(workspace_root: Path) -> AgentRun | None:
     """Return the most recent run, or None if no history."""
     history = load_run_history(workspace_root, limit=1)
     return history[0] if history else None
+
+
+def record_turn(turn: ConversationTurn, workspace_root: Path, run_id: str) -> None:
+    """Append a conversation turn to the run's turns log."""
+    runs_dir = Path(workspace_root) / "runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    turns_file = runs_dir / f"{run_id}_turns.jsonl"
+    with open(turns_file, "a", encoding="utf-8") as f:
+        f.write(turn.model_dump_json() + "\n")
+
+
+def load_run_turns(workspace_root: Path, run_id: str) -> list[dict]:
+    """Load conversation turns for a specific run."""
+    turns_file = Path(workspace_root) / "runs" / f"{run_id}_turns.jsonl"
+    if not turns_file.exists():
+        return []
+    turns = []
+    for line in turns_file.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            turns.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue  # partial write from concurrent read
+    return turns
 
 
 def count_runs_since(

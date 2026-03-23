@@ -1,0 +1,99 @@
+---
+- name: Install system packages
+  apt:
+    name:
+      - git
+    state: present
+    update_cache: true
+
+- name: Create clarion user
+  user:
+    name: clarion
+    system: true
+    shell: /usr/sbin/nologin
+    home: /opt/clarion
+    create_home: false
+
+- name: Create directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: clarion
+    group: clarion
+    mode: "0755"
+  loop:
+    - /opt/clarion
+    - /opt/clarion/data
+    - /opt/clarion/data/platform/.secrets
+
+- name: Sync project code
+  synchronize:
+    src: "{{ playbook_dir }}/../"
+    dest: /opt/clarion/
+    rsync_opts:
+      - "--exclude=.venv"
+      - "--exclude=.git"
+      - "--exclude=data"
+      - "--exclude=deploy"
+      - "--exclude=.env"
+      - "--exclude=__pycache__"
+      - "--exclude=.pytest_cache"
+      - "--exclude=.ruff_cache"
+    delete: true
+  notify: restart clarion
+
+- name: Fix code ownership
+  file:
+    path: /opt/clarion
+    owner: clarion
+    group: clarion
+    recurse: true
+
+- name: Install uv
+  shell: curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+  args:
+    creates: /usr/local/bin/uv
+
+- name: Install Python dependencies
+  command: uv sync --frozen --python 3.13
+  args:
+    chdir: /opt/clarion
+  become: true
+  become_user: clarion
+  environment:
+    HOME: /opt/clarion
+
+- name: Write platform secrets
+  copy:
+    content: "{{ item.value }}"
+    dest: "/opt/clarion/data/platform/.secrets/{{ item.key }}"
+    owner: clarion
+    group: clarion
+    mode: "0600"
+  loop: "{{ platform_secrets | dict2items }}"
+  no_log: true
+  notify: restart clarion
+
+- name: Write environment file
+  template:
+    src: clarion.env.j2
+    dest: /opt/clarion/.env
+    owner: clarion
+    group: clarion
+    mode: "0600"
+  notify: restart clarion
+
+- name: Install systemd unit
+  template:
+    src: clarion.service.j2
+    dest: /etc/systemd/system/clarion.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart clarion
+
+- name: Enable and start clarion
+  systemd:
+    name: clarion
+    enabled: true
+    state: started

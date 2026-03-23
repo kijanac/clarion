@@ -126,6 +126,21 @@ class RunContext(BaseModel):
     current_datetime: datetime
 
 
+class ConversationTurn(BaseModel):
+    """A single turn in an agent run's conversation history."""
+
+    model_config = ConfigDict(frozen=True)
+
+    step: int
+    timestamp: datetime
+    role: str  # "assistant" | "tool"
+    text: str | None = None
+    tool_calls: list[ToolCallRequest] = Field(default_factory=list)
+    tool_call_id: str | None = None
+    tool_name: str | None = None
+    tool_error: bool = False
+
+
 class DeliveryAdapter(Protocol):
     """Protocol for output delivery adapters."""
 

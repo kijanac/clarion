@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import re
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -128,8 +127,6 @@ async def deep_research(
     question: str,
     *,
     max_sources: int = DEFAULT_MAX_SOURCES,
-    workspace_root: Path | None = None,
-    agent_id: str = "",
     cache: FetchCache | None = None,
     ddg_rate_limiter: DdgRateLimiter | None = None,
 ) -> str:
@@ -139,8 +136,6 @@ async def deep_research(
             _deep_research_inner(
                 question,
                 max_sources=max_sources,
-                workspace_root=workspace_root,
-                agent_id=agent_id,
                 cache=cache,
                 ddg_rate_limiter=ddg_rate_limiter,
             ),
@@ -158,8 +153,6 @@ async def _deep_research_inner(
     question: str,
     *,
     max_sources: int = DEFAULT_MAX_SOURCES,
-    workspace_root: Path | None = None,
-    agent_id: str = "",
     cache: FetchCache | None = None,
     ddg_rate_limiter: DdgRateLimiter | None = None,
 ) -> str:
@@ -168,12 +161,7 @@ async def _deep_research_inner(
 
     # Run all searches concurrently.
     search_tasks = [
-        resolve_search(
-            q,
-            workspace_root=workspace_root,
-            agent_id=agent_id,
-            ddg_rate_limiter=ddg_rate_limiter,
-        )
+        resolve_search(q, ddg_rate_limiter=ddg_rate_limiter)
         for q in queries
     ]
     search_results = await asyncio.gather(*search_tasks)
@@ -252,8 +240,6 @@ class DeepResearchHandler(ToolHandler):
         text = await deep_research(
             str(arguments["question"]),
             max_sources=max_sources,
-            workspace_root=ctx.workspace_root,
-            agent_id=ctx.agent_id,
             cache=ctx.fetch_cache,
             ddg_rate_limiter=self._ddg_rate_limiter,
         )

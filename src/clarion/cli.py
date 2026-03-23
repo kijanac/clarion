@@ -4,16 +4,30 @@ from __future__ import annotations
 
 import asyncio
 import os
+import signal
 from datetime import UTC, datetime
 from pathlib import Path
 
+import structlog
+import typer
+import uvicorn
 from dotenv import load_dotenv
+from rich.console import Console
+from rich.table import Table
+
+from clarion.adapters.telegram import TelegramAdapter
+from clarion.agent_config import ConfigValidationError, load_agent_config
+from clarion.agent_runner import new_run_id, run_agent
+from clarion.api import create_app
+from clarion.daemon import Daemon
+from clarion.llm_client import OpenAIStreamingClient
+from clarion.logging import configure_logging
+from clarion.models import OutputType, RunContext
+from clarion.tools.executor import ToolExecutor
 
 load_dotenv()
 
-import typer
-from rich.console import Console
-from rich.table import Table
+log = structlog.get_logger()
 
 app = typer.Typer(
     name="clarion",
@@ -58,8 +72,6 @@ def run(
     ),
 ) -> None:
     """Execute a single agent run."""
-    from clarion.logging import configure_logging
-
     configure_logging(json=json_logs, level="INFO")
 
     try:
@@ -68,7 +80,6 @@ def run(
         console.print(f"[red]Fatal error: {exc}[/red]")
         raise typer.Exit(1)
 
-    # Print summary
     _print_run_summary(result)
 
     if result.status.value != "success":
@@ -77,18 +88,8 @@ def run(
 
 async def _run_agent(agent_id: str):
     """Load config, assemble context, run the agent."""
-    import structlog
-
-    from clarion.agent_config import ConfigValidationError, load_agent_config
-    from clarion.agent_runner import new_run_id, run_agent
-    from clarion.llm_client import OpenAIStreamingClient
-    from clarion.models import OutputType, RunContext
-    from clarion.tools.executor import ToolExecutor
-
-    log = structlog.get_logger()
     repo_root = _find_repo_root()
 
-    # 1. Load and validate agent config
     agent_dir = repo_root / "agents" / agent_id
     if not agent_dir.exists():
         raise FileNotFoundError(f"Agent directory not found: {agent_dir}")
@@ -106,7 +107,6 @@ async def _run_agent(agent_id: str):
     console.print(f"Template: {config.template}")
     console.print(f"Model: {config.model}")
 
-    # 2. Ensure workspace exists
     data_root = _data_root()
     workspace = data_root / "agents" / agent_id
     workspace.mkdir(parents=True, exist_ok=True)
@@ -115,7 +115,6 @@ async def _run_agent(agent_id: str):
     (workspace / "runs").mkdir(exist_ok=True)
     (workspace / "cache").mkdir(exist_ok=True)
 
-    # 3. Load mission
     mission_path = workspace / "mission.md"
     if not mission_path.exists():
         raise FileNotFoundError(
@@ -123,11 +122,7 @@ async def _run_agent(agent_id: str):
             f"Create it at: {mission_path}"
         )
     mission_md = mission_path.read_text()
-
     console.print(f"Mission: {mission_path}")
-
-    # 4. Set up delivery adapters
-    from clarion.adapters.telegram import TelegramAdapter
 
     adapters = {}
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
@@ -137,10 +132,7 @@ async def _run_agent(agent_id: str):
     else:
         console.print("Telegram: [yellow]not configured (TELEGRAM_BOT_TOKEN not set)[/yellow]")
 
-    # 5. Create LLM client
     llm_client = OpenAIStreamingClient()
-
-    # 6. Create tool executor
     executor = ToolExecutor(
         agent_id=agent_id,
         agent_config=config,
@@ -149,7 +141,6 @@ async def _run_agent(agent_id: str):
         schedule_timezone=config.schedule_timezone,
     )
 
-    # 7. Assemble run context
     run_id = new_run_id()
     context = RunContext(
         agent_id=agent_id,
@@ -164,7 +155,6 @@ async def _run_agent(agent_id: str):
     console.print(f"Run ID: {run_id}")
     console.print("---")
 
-    # 8. Execute
     result = await run_agent(context, llm_client, executor)
     return result
 
@@ -211,6 +201,11 @@ def daemon(
         "--max-concurrent",
         help="Maximum concurrent agent runs",
     ),
+    web_port: int = typer.Option(
+        0,
+        "--web-port",
+        help="Start embedded web UI on this port (0 = disabled)",
+    ),
     json_logs: bool = typer.Option(
         True,
         "--json-logs/--no-json-logs",
@@ -218,11 +213,6 @@ def daemon(
     ),
 ) -> None:
     """Start the Clarion daemon. Runs until interrupted."""
-    import signal
-
-    from clarion.daemon import Daemon
-    from clarion.logging import configure_logging
-
     configure_logging(json=json_logs, level="INFO")
 
     repo_root = _find_repo_root()
@@ -234,6 +224,21 @@ def daemon(
     )
 
     loop = asyncio.new_event_loop()
+
+    if web_port:
+        api_app = create_app(
+            agents_dir=repo_root / "agents",
+            templates_dir=repo_root / "templates",
+            data_root=_data_root(),
+            daemon=d,
+            static_dir=Path(__file__).parent / "static",
+        )
+        uvi_config = uvicorn.Config(
+            api_app, host="0.0.0.0", port=web_port, log_level="warning"
+        )
+        uvi_server = uvicorn.Server(uvi_config)
+        loop.create_task(uvi_server.serve())
+        console.print(f"Web UI: [green]http://0.0.0.0:{web_port}[/green]")
 
     def _handle_signal() -> None:
         loop.create_task(d.shutdown())
@@ -247,6 +252,39 @@ def daemon(
         loop.close()
 
 
+# ── clarion web ─────────────────────────────────────────────────────────
+
+
+@app.command()
+def web(
+    port: int = typer.Option(8100, "--port", "-p", help="API server port"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address"),
+    dev: bool = typer.Option(False, "--dev", help="Enable CORS for local Vite dev server"),
+    json_logs: bool = typer.Option(
+        True,
+        "--json-logs/--no-json-logs",
+        help="JSON log output",
+    ),
+) -> None:
+    """Start the Clarion web API server (no daemon)."""
+    configure_logging(json=json_logs, level="INFO")
+
+    repo_root = _find_repo_root()
+    api_app = create_app(
+        agents_dir=repo_root / "agents",
+        templates_dir=repo_root / "templates",
+        data_root=_data_root(),
+        static_dir=Path(__file__).parent / "static",
+        dev=dev,
+    )
+
+    console.print(f"Clarion API: [green]http://{host}:{port}[/green]")
+    if dev:
+        console.print("[yellow]CORS enabled for localhost:5173[/yellow]")
+
+    uvicorn.run(api_app, host=host, port=port, log_level="warning")
+
+
 # ── clarion register ────────────────────────────────────────────────────
 
 
@@ -258,8 +296,6 @@ def register(
     ),
 ) -> None:
     """Validate an agent config and confirm it's ready to run."""
-    from clarion.agent_config import ConfigValidationError, load_agent_config
-
     repo_root = _find_repo_root()
     agent_id = agent_dir.name
 
@@ -279,7 +315,6 @@ def register(
     console.print(f"[green]✓[/green] tools: {', '.join(config.tools)}")
     console.print(f"[green]✓[/green] outputs: {len(config.outputs)} defined")
 
-    # Check runtime directory
     workspace = _data_root() / "agents" / agent_id
     mission = workspace / "mission.md"
     if mission.exists():
@@ -299,7 +334,6 @@ def health() -> None:
     """Check that the Clarion environment is properly configured."""
     all_ok = True
 
-    # Check LLM config
     base_url = os.environ.get("LLM_BASE_URL", "")
     api_key = os.environ.get("LLM_API_KEY", "")
     if base_url and api_key:
@@ -308,21 +342,18 @@ def health() -> None:
         console.print("[red]✗[/red] LLM: LLM_BASE_URL and/or LLM_API_KEY not set")
         all_ok = False
 
-    # Check Telegram
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     if bot_token:
         console.print("[green]✓[/green] Telegram: configured")
     else:
         console.print("[yellow]![/yellow] Telegram: TELEGRAM_BOT_TOKEN not set (optional)")
 
-    # Check data directory
     data = _data_root()
     if data.exists():
         console.print(f"[green]✓[/green] Data dir: {data}")
     else:
         console.print(f"[yellow]![/yellow] Data dir not found: {data}")
 
-    # Check templates
     templates = _find_repo_root() / "templates"
     if templates.exists():
         template_names = [p.stem for p in templates.glob("*.yaml")]
@@ -331,7 +362,6 @@ def health() -> None:
         console.print("[red]✗[/red] Templates directory not found")
         all_ok = False
 
-    # Check agents
     agents_dir = _find_repo_root() / "agents"
     if agents_dir.exists():
         agent_names = [p.name for p in agents_dir.iterdir() if p.is_dir()]

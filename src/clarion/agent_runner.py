@@ -16,9 +16,16 @@ from uuid import uuid4
 
 import structlog
 
-from clarion.agent_state import record_run
+from clarion.agent_state import record_run, record_turn
 from clarion.logging import bind_context, clear_context
-from clarion.models import AgentRun, AgentTurn, ResourceEnvelope, RunContext, RunStatus
+from clarion.models import (
+    AgentRun,
+    AgentTurn,
+    ConversationTurn,
+    ResourceEnvelope,
+    RunContext,
+    RunStatus,
+)
 from clarion.prompt_assembly import build_system_prompt
 from clarion.tool_registry import get_tool_schemas
 from clarion.tools.executor import ToolExecutor
@@ -183,6 +190,7 @@ async def _run_loop(
     system_prompt = build_system_prompt(context)
     tool_schemas = get_tool_schemas(context.config.tools)
     messages: list[dict] = []
+    workspace = Path(context.workspace_root)
     step = 0
 
     while step < MAX_TOOL_STEPS:
@@ -219,6 +227,19 @@ async def _run_loop(
             ]
         messages.append(assistant_msg)
 
+        # Persist the assistant turn
+        record_turn(
+            ConversationTurn(
+                step=step,
+                timestamp=datetime.now(UTC),
+                role="assistant",
+                text=turn.text,
+                tool_calls=turn.tool_calls,
+            ),
+            workspace,
+            context.run_id,
+        )
+
         # If no tool calls, the agent is done
         if not turn.tool_calls:
             break
@@ -226,6 +247,7 @@ async def _run_loop(
         # Execute tool calls
         tool_executor.start_turn()
         for tc in turn.tool_calls:
+            tool_error = False
             try:
                 tracker.check_and_record(tc.name)
                 result = await tool_executor.execute(
@@ -240,12 +262,29 @@ async def _run_loop(
             except Exception as exc:
                 # Tool error → tell the LLM, don't crash the run
                 result = {"text": f"Tool error: {exc}"}
+                tool_error = True
 
+            result_text = result.get("text", "")
             messages.append({
                 "role": "tool",
                 "tool_call_id": tc.id,
-                "content": result.get("text", ""),
+                "content": result_text,
             })
+
+            # Persist the tool result turn
+            record_turn(
+                ConversationTurn(
+                    step=step,
+                    timestamp=datetime.now(UTC),
+                    role="tool",
+                    text=result_text,
+                    tool_call_id=tc.id,
+                    tool_name=tc.name,
+                    tool_error=tool_error,
+                ),
+                workspace,
+                context.run_id,
+            )
 
         # Commit side effects
         side_effects = tool_executor.commit_turn()
