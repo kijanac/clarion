@@ -1,6 +1,7 @@
 import type { AgentSummary } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { StatusDot } from "@/components/status-dot";
+import { cn } from "@/lib/utils";
 import { relativeTime, formatTriggerSummary } from "@/lib/format";
 
 interface AgentCardProps {
