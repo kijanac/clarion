@@ -20,9 +20,10 @@ MINIMAL_AGENT_YAML = (
     "  description: A test agent\n"
     "  owner: test-owner\n"
     "  version: 1\n"
-    "schedule:\n"
-    '  default: "0 */4 * * *"\n'
-    "  timezone: UTC\n"
+    "timezone: UTC\n"
+    "triggers:\n"
+    '  - type: cron\n'
+    '    expression: "0 */4 * * *"\n'
     "database:\n"
     "  enabled: true\n"
     "outputs: []\n"
@@ -119,35 +120,7 @@ class TestRunBudget:
             )
             record_run(run, workspace)
 
-        assert d._can_run("agent-a", "scheduled") is False
-
-    async def test_self_scheduled_budget_enforced(self, tmp_path: Path) -> None:
-        agents_dir, templates_dir, data_root = _setup_env(tmp_path)
-
-        d = Daemon(
-            agents_dir=agents_dir,
-            templates_dir=templates_dir,
-            data_root=data_root,
-        )
-        d._registry.scan()
-
-        workspace = data_root / "agents" / "agent-a"
-
-        # Fill up self-scheduled budget (default is 6)
-        config = d._registry.get("agent-a")
-        for i in range(config.resources.max_self_scheduled_runs_per_day):
-            run = AgentRun(
-                run_id=f"run_self_{i:04d}",
-                agent_id="agent-a",
-                started_at=datetime.now(UTC),
-                status=RunStatus.SUCCESS,
-                trigger="self_scheduled",
-            )
-            record_run(run, workspace)
-
-        assert d._can_run("agent-a", "self_scheduled") is False
-        # But scheduled runs should still be allowed (total < max)
-        assert d._can_run("agent-a", "scheduled") is True
+        assert d._can_run("agent-a") is False
 
     async def test_can_run_when_budget_available(self, tmp_path: Path) -> None:
         agents_dir, templates_dir, data_root = _setup_env(tmp_path)
@@ -159,8 +132,7 @@ class TestRunBudget:
         )
         d._registry.scan()
 
-        assert d._can_run("agent-a", "scheduled") is True
-        assert d._can_run("agent-a", "self_scheduled") is True
+        assert d._can_run("agent-a") is True
 
     async def test_can_run_unknown_agent(self, tmp_path: Path) -> None:
         agents_dir, templates_dir, data_root = _setup_env(tmp_path)
@@ -172,7 +144,7 @@ class TestRunBudget:
         )
         d._registry.scan()
 
-        assert d._can_run("nonexistent", "scheduled") is False
+        assert d._can_run("nonexistent") is False
 
 
 # ── Config change handling ──────────────────────────────────────────────
@@ -230,7 +202,7 @@ class TestAgentRemoval:
             data_root=data_root,
         )
         d._registry.scan()
-        d._register_schedule("agent-a", d._registry.get("agent-a"))
+        d._register_agent("agent-a", d._registry.get("agent-a"))
 
         d._unregister_agent("agent-a")
 

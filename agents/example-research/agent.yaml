@@ -8,10 +8,11 @@ meta:
   version: 1
 
 template: research
+timezone: America/New_York
 
-schedule:
-  default: "0 6 * * 1"          # every Monday at 06:00
-  timezone: America/New_York
+triggers:
+  - type: cron
+    expression: "0 6 * * 1"  # every Monday at 06:00
 
 database:
   enabled: true

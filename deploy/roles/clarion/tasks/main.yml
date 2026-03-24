@@ -39,6 +39,10 @@
       - "--exclude=__pycache__"
       - "--exclude=.pytest_cache"
       - "--exclude=.ruff_cache"
+      - "--exclude=.local"
+      - "--exclude=.ansible"
+      - "--exclude=.cache"
+      - "--exclude=web/node_modules"
     delete: true
   notify: restart clarion
 
@@ -62,6 +66,7 @@
   become_user: clarion
   environment:
     HOME: /opt/clarion
+    UV_PYTHON_INSTALL_DIR: /opt/clarion/.local/share/uv/python
 
 - name: Write platform secrets
   copy:

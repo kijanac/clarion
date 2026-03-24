@@ -25,7 +25,7 @@ export function useRunDetail(agentId: string | null, runId: string | null) {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to fetch run detail");
+          setError(err instanceof Error ? err.message : "Couldn't load run details");
         }
       })
       .finally(() => {

@@ -6,10 +6,12 @@ populated AgentConfig.
 
 from __future__ import annotations
 
+import zoneinfo
 from pathlib import Path
 from typing import Any
 
 import yaml
+from croniter import croniter
 
 from clarion.boundary_validation import expand_env_vars
 from clarion.models import (
@@ -18,6 +20,8 @@ from clarion.models import (
     OutputTrigger,
     OutputType,
     ResourceEnvelope,
+    TriggerDefinition,
+    TriggerType,
 )
 
 
@@ -58,14 +62,13 @@ def load_agent_config(
     owner = meta.get("owner", "")
     version = meta.get("version", 1)
 
-    # 5. Schedule
-    schedule = raw.get("schedule", {})
-    if not isinstance(schedule, dict):
-        raise ConfigValidationError("'schedule' must be a mapping")
-    schedule_cron = schedule.get("default", "0 */4 * * *")
-    schedule_timezone = schedule.get("timezone", "UTC")
-    _validate_cron(schedule_cron)
-    _validate_timezone(schedule_timezone)
+    # 5. Triggers + timezone
+    timezone = raw.get("timezone", "UTC")
+    validate_timezone(timezone)
+    raw_triggers = raw.get("triggers", [])
+    if not isinstance(raw_triggers, list):
+        raise ConfigValidationError("'triggers' must be a list")
+    triggers = parse_triggers(raw_triggers)
 
     # 6. Outputs
     raw_outputs = raw.get("outputs", [])
@@ -109,8 +112,8 @@ def load_agent_config(
         owner=owner,
         version=version,
         template=template_name,
-        schedule_cron=schedule_cron,
-        schedule_timezone=schedule_timezone,
+        triggers=triggers,
+        timezone=timezone,
         outputs=outputs,
         database_enabled=database_enabled,
         resources=resources,
@@ -152,18 +155,14 @@ def _find_templates_dir(agent_dir: Path) -> Path:
     )
 
 
-def _validate_cron(expr: str) -> None:
-    """Validate a cron expression."""
-    from croniter import croniter
-
+def validate_cron(expr: str) -> None:
+    """Validate a cron expression. Raises ConfigValidationError."""
     if not croniter.is_valid(expr):
         raise ConfigValidationError(f"Invalid cron expression: {expr!r}")
 
 
-def _validate_timezone(tz: str) -> None:
-    """Validate a timezone string."""
-    import zoneinfo
-
+def validate_timezone(tz: str) -> None:
+    """Validate a timezone string. Raises ConfigValidationError."""
     try:
         zoneinfo.ZoneInfo(tz)
     except (KeyError, zoneinfo.ZoneInfoNotFoundError):
@@ -210,6 +209,42 @@ def _parse_outputs(raw_outputs: list[dict[str, Any]]) -> list[OutputDefinition]:
             )
         )
     return outputs
+
+
+def parse_triggers(raw_triggers: list[Any]) -> list[TriggerDefinition]:
+    """Parse and validate trigger definitions."""
+    triggers = []
+    for raw in raw_triggers:
+        if not isinstance(raw, dict):
+            raise ConfigValidationError("Each trigger must be a mapping")
+        try:
+            trigger_type = TriggerType(raw.get("type", ""))
+        except ValueError:
+            raise ConfigValidationError(
+                f"Invalid trigger type: {raw.get('type')!r}. Must be one of: {[t.value for t in TriggerType]}"
+            )
+
+        if trigger_type == TriggerType.CRON:
+            expression = raw.get("expression", "")
+            if not expression:
+                raise ConfigValidationError("Cron trigger must have an 'expression'")
+            validate_cron(expression)
+            triggers.append(TriggerDefinition(type=trigger_type, expression=expression))
+
+        elif trigger_type == TriggerType.AGENT_OUTPUT:
+            source_agent = raw.get("source_agent", "")
+            output_name = raw.get("output_name", "")
+            if not source_agent or not output_name:
+                raise ConfigValidationError(
+                    "agent_output trigger must have 'source_agent' and 'output_name'"
+                )
+            triggers.append(TriggerDefinition(
+                type=trigger_type,
+                source_agent=source_agent,
+                output_name=output_name,
+            ))
+
+    return triggers
 
 
 def _resolve_resources(

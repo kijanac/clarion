@@ -18,6 +18,7 @@ from rich.table import Table
 from clarion.adapters.telegram import TelegramAdapter
 from clarion.agent_config import ConfigValidationError, load_agent_config
 from clarion.agent_runner import new_run_id, run_agent
+from clarion.agent_state import ensure_workspace
 from clarion.api import create_app
 from clarion.daemon import Daemon
 from clarion.llm_client import OpenAIStreamingClient
@@ -108,12 +109,7 @@ async def _run_agent(agent_id: str):
     console.print(f"Model: {config.model}")
 
     data_root = _data_root()
-    workspace = data_root / "agents" / agent_id
-    workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "databases").mkdir(exist_ok=True)
-    (workspace / "cron").mkdir(exist_ok=True)
-    (workspace / "runs").mkdir(exist_ok=True)
-    (workspace / "cache").mkdir(exist_ok=True)
+    workspace = ensure_workspace(data_root / "agents" / agent_id)
 
     mission_path = workspace / "mission.md"
     if not mission_path.exists():
@@ -138,7 +134,7 @@ async def _run_agent(agent_id: str):
         agent_config=config,
         workspace_root=workspace,
         delivery_adapters=adapters,
-        schedule_timezone=config.schedule_timezone,
+        timezone=config.timezone,
     )
 
     run_id = new_run_id()
@@ -311,7 +307,13 @@ def register(
 
     console.print(f"[green]✓[/green] agent.yaml valid")
     console.print(f"[green]✓[/green] template: {config.template}")
-    console.print(f"[green]✓[/green] schedule: {config.schedule_cron} ({config.schedule_timezone})")
+    trigger_strs = []
+    for t in config.triggers:
+        if t.type.value == "cron":
+            trigger_strs.append(f"cron({t.expression})")
+        elif t.type.value == "agent_output":
+            trigger_strs.append(f"agent_output({t.source_agent}:{t.output_name})")
+    console.print(f"[green]✓[/green] triggers: {', '.join(trigger_strs) or 'none'} (tz={config.timezone})")
     console.print(f"[green]✓[/green] tools: {', '.join(config.tools)}")
     console.print(f"[green]✓[/green] outputs: {len(config.outputs)} defined")
 

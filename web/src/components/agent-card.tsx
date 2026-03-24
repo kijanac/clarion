@@ -1,20 +1,7 @@
 import type { AgentSummary } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import { relativeTime } from "@/lib/format";
-
-function StatusDot({ status }: { status: string | null }) {
-  const colorClass =
-    status === "success"
-      ? "bg-green-500"
-      : status === "failed"
-        ? "bg-red-500"
-        : status === "running"
-          ? "bg-amber-500 animate-pulse"
-          : "bg-muted-foreground";
-
-  return <span className={cn("inline-block h-2 w-2 rounded-full shrink-0", colorClass)} />;
-}
+import { StatusDot } from "@/components/status-dot";
+import { relativeTime, formatTriggerSummary } from "@/lib/format";
 
 interface AgentCardProps {
   agent: AgentSummary;
@@ -50,8 +37,8 @@ export function AgentCard({ agent, selected, onSelect }: AgentCardProps) {
       </div>
       <div className="text-xs text-muted-foreground font-mono space-y-0.5">
         <div className="truncate">{agent.owner}</div>
-        {agent.schedule_cron && (
-          <div className="truncate">{agent.schedule_cron}</div>
+        {agent.triggers.length > 0 && (
+          <div className="truncate">{formatTriggerSummary(agent.triggers)}</div>
         )}
         {agent.last_run_at && (
           <div className="truncate">{relativeTime(agent.last_run_at)}</div>

@@ -1,11 +1,32 @@
+export interface Template {
+  id: string;
+  name: string;
+  description: string;
+  tools: string[];
+  model: string;
+}
+
+export interface TemplateDetail extends Template {
+  max_tokens: number;
+  system_prompt: string;
+  resources: Record<string, number>;
+}
+
+export interface TriggerDefinition {
+  type: "cron" | "agent_output";
+  expression?: string;
+  source_agent?: string;
+  output_name?: string;
+}
+
 export interface AgentSummary {
   id: string;
   name: string;
   description: string;
   owner: string;
   template: string;
-  schedule_cron: string | null;
-  schedule_timezone: string | null;
+  triggers: TriggerDefinition[];
+  timezone: string;
   last_run_status: string | null;
   last_run_at: string | null;
   outputs_count: number;

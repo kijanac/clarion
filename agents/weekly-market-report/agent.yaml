@@ -1,0 +1,21 @@
+meta:
+  name: weekly-market-report
+  description: 'Long-running research and synthesis agent. Searches the web, fetches
+    sources, builds a persistent knowledge base, and produces structured briefings
+    on cadence.
+
+    '
+  owner: research-team
+  version: 1
+template: research
+triggers:
+- type: cron
+  expression: 0 6 * * 1
+- type: agent_output
+  source_agent: daily-unionization-alerts
+  output_name: weekly-briefing
+timezone: America/New_York
+database:
+  enabled: true
+outputs: []
+resources: {}

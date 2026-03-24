@@ -33,6 +33,16 @@ export function statusColor(status: string): string {
   }
 }
 
+export function formatTriggerSummary(triggers: { type: string; expression?: string; source_agent?: string; output_name?: string }[]): string {
+  return triggers
+    .map((t) => {
+      if (t.type === "cron") return t.expression ?? "cron";
+      if (t.type === "agent_output") return `when ${t.source_agent} produces ${t.output_name}`;
+      return t.type;
+    })
+    .join(", ");
+}
+
 export function relativeTime(iso: string): string {
   const now = Date.now();
   const then = new Date(iso).getTime();

@@ -42,13 +42,13 @@ class ToolExecutor:
         agent_config: AgentConfig,
         workspace_root: Path,
         delivery_adapters: dict[OutputType, DeliveryAdapter] | None = None,
-        schedule_timezone: str = "UTC",
+        timezone: str = "UTC",
     ) -> None:
         self._agent_id = agent_id
         self._agent_config = agent_config
         self._workspace_root = workspace_root
         self._delivery_adapters = delivery_adapters or {}
-        self._schedule_timezone = schedule_timezone
+        self._timezone = timezone
         self._fetch_cache: FetchCache | None = None
         try:
             self._fetch_cache = FetchCache(workspace_root, agent_id)
@@ -109,7 +109,7 @@ class ToolExecutor:
             agent_config=self._agent_config,
             delivery_adapters=self._delivery_adapters,
             fetch_cache=self._fetch_cache,
-            schedule_timezone=self._schedule_timezone,
+            timezone=self._timezone,
             correlation_id=correlation_id,
         )
 

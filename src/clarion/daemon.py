@@ -1,7 +1,8 @@
 """Clarion daemon — layer 3.
 
-The always-on process. Manages the lifecycle: scan agents,
-register schedules, fire runs, handle rescheduling, watch for changes.
+The always-on process. Manages agent lifecycle: scan agents,
+register triggers with APScheduler + EventBus, fire runs,
+emit output_produced events, watch for config changes.
 """
 
 from __future__ import annotations
@@ -12,20 +13,22 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import structlog
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from clarion.agent_registry import AgentRegistry
 from clarion.agent_runner import new_run_id, run_agent
-from clarion.agent_state import count_runs_since
-from clarion.cron_scheduler import CronScheduler
-from clarion.cron_state import CronJob, load_cron_state
+from clarion.agent_state import count_runs_since, ensure_workspace
+from clarion.event_bus import Event, EventBus, EventType
 from clarion.llm_client import OpenAIStreamingClient
-from clarion.models import AgentConfig, OutputType, RunContext, RunStatus
+from clarion.models import AgentConfig, OutputType, RunContext, TriggerType
+from clarion.tools.executor import ToolExecutor
 
 log = structlog.get_logger()
 
 
 class Daemon:
-    """The Clarion daemon — runs agents on their schedules."""
+    """The Clarion daemon — runs agents on their triggers."""
 
     def __init__(
         self,
@@ -44,47 +47,44 @@ class Daemon:
             templates_dir=templates_dir,
             data_root=data_root,
         )
-        self._scheduler = CronScheduler(tick_interval=30.0)
+        self._event_bus = EventBus(fire_callback=self._fire_run)
+        self._scheduler = AsyncIOScheduler()
         self._max_concurrent = max_concurrent_runs
         self._run_semaphore = asyncio.Semaphore(max_concurrent_runs)
         self._active_runs: dict[str, asyncio.Task[None]] = {}
 
         self._shutdown_event = asyncio.Event()
         self._watcher_task: asyncio.Task[None] | None = None
-        self._scheduler_task: asyncio.Task[None] | None = None
+        self._bus_task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         """Start the daemon. Runs until interrupted."""
-        # 1. Scan agents/ directory
         self._registry.scan()
         agents = self._registry.all_agents()
         log.info("daemon.scan_complete", agents=len(agents))
 
-        # 2. Register schedules with CronScheduler
         for agent_id, config in agents.items():
-            self._register_schedule(agent_id, config)
+            self._register_agent(agent_id, config)
 
-        # 3. Start file watcher
+        self._scheduler.start()
+        self._bus_task = asyncio.create_task(self._event_bus.run())
         self._watcher_task = asyncio.create_task(self._watch_files())
 
-        # 4. Start scheduler tick loop
-        self._scheduler_task = asyncio.create_task(self._scheduler.run())
-
-        # 5. Wait for shutdown signal
         await self._shutdown_event.wait()
 
     async def shutdown(self) -> None:
-        """Graceful shutdown. Wait for in-flight runs to complete."""
+        """Graceful shutdown."""
         log.info("daemon.shutdown_start")
         self._shutdown_event.set()
 
+        self._scheduler.shutdown(wait=False)
+        self._event_bus.stop()
+
         if self._watcher_task is not None:
             self._watcher_task.cancel()
-        if self._scheduler_task is not None:
-            self._scheduler.stop()
-            self._scheduler_task.cancel()
+        if self._bus_task is not None:
+            self._bus_task.cancel()
 
-        # Wait for in-flight runs with a grace period
         if self._active_runs:
             log.info("daemon.shutdown_waiting", active_runs=len(self._active_runs))
             done, pending = await asyncio.wait(
@@ -98,34 +98,58 @@ class Daemon:
 
         log.info("daemon.shutdown_complete")
 
-    # -- schedule registration ------------------------------------------------
+    # -- trigger registration -------------------------------------------------
 
-    def _register_schedule(self, agent_id: str, config: AgentConfig) -> None:
-        """Register an agent's default cron schedule."""
-        workspace = self._data_root / "agents" / agent_id
-        workspace.mkdir(parents=True, exist_ok=True)
-        (workspace / "cron").mkdir(exist_ok=True)
-        (workspace / "runs").mkdir(exist_ok=True)
+    def _register_agent(self, agent_id: str, config: AgentConfig) -> None:
+        """Register an agent's triggers with APScheduler and EventBus."""
+        ensure_workspace(self._data_root / "agents" / agent_id)
+        self._event_bus.register(agent_id, config.triggers)
 
-        async def _on_cron_fire(aid: str, job: CronJob) -> None:
-            await self._fire_run(aid, trigger="self_scheduled")
+        for i, trigger in enumerate(config.triggers):
+            if trigger.type == TriggerType.CRON and trigger.expression:
+                job_id = f"{agent_id}__cron_{i}"
+                cron_trigger = CronTrigger.from_crontab(
+                    trigger.expression,
+                    timezone=config.timezone,
+                )
+                self._scheduler.add_job(
+                    self._emit_cron_event,
+                    trigger=cron_trigger,
+                    args=[agent_id],
+                    id=job_id,
+                    replace_existing=True,
+                )
+                log.info(
+                    "daemon.cron_registered",
+                    agent_id=agent_id,
+                    expression=trigger.expression,
+                    timezone=config.timezone,
+                )
 
-        self._scheduler.register(agent_id, str(workspace), _on_cron_fire)
-        log.info(
-            "daemon.schedule_registered",
-            agent_id=agent_id,
-            cron=config.schedule_cron,
-        )
+    def _remove_scheduler_jobs(self, agent_id: str) -> None:
+        """Remove all APScheduler jobs for an agent."""
+        for job in self._scheduler.get_jobs():
+            if job.id.startswith(f"{agent_id}__"):
+                job.remove()
 
     def _unregister_agent(self, agent_id: str) -> None:
-        """Remove an agent from registry and scheduler."""
+        """Remove an agent from registry, scheduler, and event bus."""
         self._registry.remove_agent(agent_id)
-        self._scheduler.unregister(agent_id)
+        self._event_bus.unregister(agent_id)
+        self._remove_scheduler_jobs(agent_id)
         log.info("daemon.agent_unregistered", agent_id=agent_id)
+
+    async def trigger_run(self, agent_id: str, trigger: str = "manual_web") -> None:
+        """Public API for triggering a run. Used by the web API."""
+        await self._fire_run(agent_id, trigger)
+
+    async def _emit_cron_event(self, agent_id: str) -> None:
+        """Called by APScheduler when a cron trigger fires."""
+        await self._event_bus.emit(Event(type=EventType.CRON_FIRED, agent_id=agent_id))
 
     # -- run budget -----------------------------------------------------------
 
-    def _can_run(self, agent_id: str, trigger: str) -> bool:
+    def _can_run(self, agent_id: str) -> bool:
         """Check if the agent has budget for another run today."""
         workspace = self._data_root / "agents" / agent_id
         today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -143,34 +167,20 @@ class Daemon:
             )
             return False
 
-        if trigger == "self_scheduled":
-            self_today = count_runs_since(
-                workspace, since=today_start, trigger_filter="self_scheduled"
-            )
-            if self_today >= config.resources.max_self_scheduled_runs_per_day:
-                log.warning(
-                    "daemon.self_schedule_budget_exhausted",
-                    agent_id=agent_id,
-                    self_today=self_today,
-                    max_self=config.resources.max_self_scheduled_runs_per_day,
-                )
-                return False
-
         return True
 
     # -- run assembly and execution -------------------------------------------
 
-    async def _fire_run(self, agent_id: str, trigger: str = "scheduled") -> None:
+    async def _fire_run(self, agent_id: str, trigger: str = "cron") -> None:
         """Assemble and spawn a single agent run."""
         config = self._registry.get(agent_id)
         if config is None:
             log.warning("daemon.fire_skip", agent_id=agent_id, reason="not registered")
             return
 
-        if not self._can_run(agent_id, trigger):
+        if not self._can_run(agent_id):
             return
 
-        # Read mission fresh from disk (hot-reload)
         workspace = self._data_root / "agents" / agent_id
         mission_path = workspace / "mission.md"
         if not mission_path.exists():
@@ -178,7 +188,6 @@ class Daemon:
             return
         mission_md = mission_path.read_text()
 
-        # Assemble RunContext
         run_id = new_run_id()
         context = RunContext(
             agent_id=agent_id,
@@ -190,7 +199,6 @@ class Daemon:
             current_datetime=datetime.now(UTC),
         )
 
-        # Spawn as a concurrent task with semaphore control
         task = asyncio.create_task(self._guarded_run(context))
         task_key = f"{agent_id}-{run_id}"
         self._active_runs[task_key] = task
@@ -202,39 +210,32 @@ class Daemon:
             await self._execute_run(context)
 
     async def _execute_run(self, context: RunContext) -> None:
-        """Execute a single agent run."""
-        from clarion.tools.executor import ToolExecutor
-
-        llm_client = OpenAIStreamingClient()
+        """Execute a single agent run, then emit output events."""
         adapters = self._build_adapters()
+        llm_client = OpenAIStreamingClient()
         executor = ToolExecutor(
             agent_id=context.agent_id,
             agent_config=context.config,
             workspace_root=Path(context.workspace_root),
             delivery_adapters=adapters,
-            schedule_timezone=context.config.schedule_timezone,
+            timezone=context.config.timezone,
         )
 
         result = await run_agent(context, llm_client, executor)
 
-        # Post-run: sync cron state for agent-initiated rescheduling
-        self._sync_cron_state(context.agent_id)
+        # Emit output_produced events so agent_output triggers fire
+        for output_name in result.outputs_produced:
+            await self._event_bus.emit(Event(
+                type=EventType.OUTPUT_PRODUCED,
+                agent_id=context.agent_id,
+                output_name=output_name,
+            ))
 
         log.info(
             "daemon.run_complete",
             agent_id=context.agent_id,
             run_id=context.run_id,
             status=result.status.value,
-        )
-
-    def _sync_cron_state(self, agent_id: str) -> None:
-        """Re-read agent's cron state after a run and update the scheduler."""
-        workspace = self._data_root / "agents" / agent_id
-        jobs = load_cron_state(workspace)
-        log.debug(
-            "daemon.cron_sync",
-            agent_id=agent_id,
-            job_count=len(jobs),
         )
 
     def _build_adapters(self) -> dict[OutputType, object]:
@@ -264,9 +265,6 @@ class Daemon:
                             self._unregister_agent(agent_id)
                         else:
                             self._handle_config_change(agent_id)
-
-                    # mission.md changes don't need handling here —
-                    # mission is read fresh at the start of each run
         except asyncio.CancelledError:
             pass
 
@@ -278,12 +276,9 @@ class Daemon:
         if new_config is None:
             return
 
-        # If schedule changed, re-register with the scheduler
-        if old_config is None or old_config.schedule_cron != new_config.schedule_cron:
-            self._scheduler.unregister(agent_id)
-            self._register_schedule(agent_id, new_config)
-            log.info(
-                "daemon.schedule_updated",
-                agent_id=agent_id,
-                cron=new_config.schedule_cron,
-            )
+        triggers_changed = old_config is None or old_config.triggers != new_config.triggers
+        timezone_changed = old_config is None or old_config.timezone != new_config.timezone
+        if triggers_changed or timezone_changed:
+            self._remove_scheduler_jobs(agent_id)
+            self._register_agent(agent_id, new_config)
+            log.info("daemon.triggers_updated", agent_id=agent_id)

@@ -8,6 +8,7 @@ import pytest
 
 from clarion.agent_config import ConfigValidationError, load_agent_config
 from clarion.boundary_validation import BoundaryValidationError
+from clarion.models import TriggerType
 
 MINIMAL_AGENT_YAML = (
     "template: research\n"
@@ -16,9 +17,10 @@ MINIMAL_AGENT_YAML = (
     "  description: A test agent\n"
     "  owner: test-owner\n"
     "  version: 1\n"
-    "schedule:\n"
-    '  default: "0 */4 * * *"\n'
-    "  timezone: UTC\n"
+    "triggers:\n"
+    '  - type: cron\n'
+    '    expression: "0 */4 * * *"\n'
+    "timezone: UTC\n"
     "database:\n"
     "  enabled: true\n"
     "outputs: []\n"
@@ -41,8 +43,10 @@ class TestLoadValidConfig:
         assert config.owner == "test-owner"
         assert config.version == 1
         assert config.template == "research"
-        assert config.schedule_cron == "0 */4 * * *"
-        assert config.schedule_timezone == "UTC"
+        assert len(config.triggers) == 1
+        assert config.triggers[0].type == TriggerType.CRON
+        assert config.triggers[0].expression == "0 */4 * * *"
+        assert config.timezone == "UTC"
         assert config.database_enabled is True
         assert config.outputs == []
         assert config.tools == ["web_search", "execute_sql"]
@@ -110,8 +114,9 @@ class TestConfigErrors:
         yaml_text = (
             "template: research\n"
             "meta: {}\n"
-            "schedule:\n"
-            '  default: "not a cron"\n'
+            "triggers:\n"
+            "  - type: cron\n"
+            '    expression: "not a cron"\n'
             "outputs: []\n"
         )
         (tmp_agent_dir / "agent.yaml").write_text(yaml_text)
@@ -125,9 +130,10 @@ class TestConfigErrors:
         yaml_text = (
             "template: research\n"
             "meta: {}\n"
-            "schedule:\n"
-            '  default: "0 */4 * * *"\n'
-            "  timezone: Not/A/Timezone\n"
+            "timezone: Not/A/Timezone\n"
+            "triggers:\n"
+            "  - type: cron\n"
+            '    expression: "0 */4 * * *"\n'
             "outputs: []\n"
         )
         (tmp_agent_dir / "agent.yaml").write_text(yaml_text)

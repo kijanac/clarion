@@ -13,7 +13,7 @@ class CurrentDatetimeHandler(ToolHandler):
     async def execute(
         self, arguments: dict[str, Any], ctx: ToolContext
     ) -> ToolResult:
-        tz_name = ctx.schedule_timezone
+        tz_name = ctx.timezone
         try:
             tz = zoneinfo.ZoneInfo(tz_name)
         except Exception:

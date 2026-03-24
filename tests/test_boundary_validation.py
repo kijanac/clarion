@@ -184,7 +184,7 @@ def _make_ctx(tmp_path: Path | None = None) -> ToolContext:
         agent_config=MagicMock(),
         delivery_adapters={},
         fetch_cache=None,
-        schedule_timezone="UTC",
+        timezone="UTC",
         correlation_id="test-corr",
     )
 

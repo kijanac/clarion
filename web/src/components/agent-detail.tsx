@@ -1,27 +1,16 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useAgent } from "@/hooks/use-agent";
 import { useRuns } from "@/hooks/use-runs";
+import { apiPost, apiPut } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { RunDetailSheet } from "@/components/run-detail";
-import { cn } from "@/lib/utils";
+import { StatusDot } from "@/components/status-dot";
 import { formatTime, formatDuration, statusColor } from "@/lib/format";
-import { ArrowLeftIcon } from "lucide-react";
-
-function StatusDot({ status }: { status: string }) {
-  const colorClass =
-    status === "success"
-      ? "bg-green-500"
-      : status === "failed"
-        ? "bg-red-500"
-        : status === "running"
-          ? "bg-amber-500 animate-pulse"
-          : "bg-muted-foreground";
-
-  return <span className={cn("inline-block h-2 w-2 rounded-full shrink-0", colorClass)} />;
-}
+import { ArrowLeftIcon, PlayIcon, PencilIcon } from "lucide-react";
 
 interface AgentDetailProps {
   agentId: string;
@@ -29,9 +18,54 @@ interface AgentDetailProps {
 }
 
 export function AgentDetail({ agentId, onBack }: AgentDetailProps) {
-  const { agent, loading, error } = useAgent(agentId);
-  const { runs, loading: runsLoading } = useRuns(agentId);
+  const { agent, loading, error, refetch: refetchAgent } = useAgent(agentId);
+  const { runs, loading: runsLoading, refetch: refetchRuns } = useRuns(agentId);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [runningNow, setRunningNow] = useState(false);
+  const [activeTab, setActiveTab] = useState("runs");
+  const [editingMission, setEditingMission] = useState(false);
+  const [missionDraft, setMissionDraft] = useState("");
+  const [savingMission, setSavingMission] = useState(false);
+  const [missionSuccess, setMissionSuccess] = useState(false);
+  const [missionError, setMissionError] = useState<string | null>(null);
+
+  const handleRunNow = useCallback(async () => {
+    setRunningNow(true);
+    try {
+      await apiPost(`/api/agents/${agentId}/run`, {});
+      setTimeout(() => {
+        refetchRuns();
+      }, 2000);
+    } catch {
+      // Run trigger failed silently — the run list will reflect the state
+    } finally {
+      setRunningNow(false);
+    }
+  }, [agentId, refetchRuns]);
+
+  const handleSaveMission = useCallback(async () => {
+    setSavingMission(true);
+    setMissionError(null);
+    try {
+      await apiPut(`/api/agents/${agentId}/mission`, { mission: missionDraft });
+      setEditingMission(false);
+      setMissionSuccess(true);
+      refetchAgent();
+      setTimeout(() => setMissionSuccess(false), 3000);
+    } catch (err: unknown) {
+      setMissionError(err instanceof Error ? err.message : "Couldn't save mission. Try again.");
+    } finally {
+      setSavingMission(false);
+    }
+  }, [agentId, missionDraft, refetchAgent]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingMission(false);
+    setMissionError(null);
+    if (agent) {
+      setMissionDraft(agent.mission_md);
+    }
+  }, [agent]);
 
   if (loading) {
     return (
@@ -44,13 +78,13 @@ export function AgentDetail({ agentId, onBack }: AgentDetailProps) {
   if (error || !agent) {
     return (
       <div className="flex items-center justify-center h-full text-destructive">
-        {error ?? "Agent not found"}
+        {error ?? "Agent not found. It may have been removed."}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full animate-fade-in">
       <div className="flex items-center gap-3 px-4 py-3 border-b">
         <Button variant="ghost" size="icon-sm" onClick={onBack}>
           <ArrowLeftIcon />
@@ -62,18 +96,48 @@ export function AgentDetail({ agentId, onBack }: AgentDetailProps) {
             {agent.last_run_status}
           </Badge>
         )}
+        <div className="ml-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-primary"
+            onClick={handleRunNow}
+            disabled={runningNow}
+          >
+            <PlayIcon data-icon="inline-start" />
+            {runningNow ? "Running..." : "Run now"}
+          </Button>
+        </div>
       </div>
 
-      <div className="flex items-center gap-4 px-4 py-2 text-xs text-muted-foreground border-b">
+      {agent.mission_md && (
+        <button
+          type="button"
+          onClick={() => setActiveTab("mission")}
+          className="block w-full text-left px-4 py-2.5 border-b border-l-2 border-l-primary/40 hover:border-l-primary hover:bg-muted/30 transition-colors cursor-pointer"
+        >
+          <p className="font-display text-sm leading-relaxed text-foreground/70 line-clamp-2">
+            {agent.mission_md}
+          </p>
+        </button>
+      )}
+
+      <div className="flex items-center gap-4 px-4 py-2 text-xs text-muted-foreground border-b flex-wrap">
         <span>owner: {agent.owner}</span>
-        {agent.schedule_cron && <span>schedule: {agent.schedule_cron}</span>}
-        {agent.schedule_timezone && <span>tz: {agent.schedule_timezone}</span>}
+        {agent.triggers.map((trigger, i) => (
+          <span key={i}>
+            {trigger.type === "cron"
+              ? `cron: ${trigger.expression}`
+              : `when ${trigger.source_agent} produces ${trigger.output_name}`}
+          </span>
+        ))}
+        {agent.timezone && <span>timezone: {agent.timezone}</span>}
         <span>runs today: {agent.runs_today}/{agent.max_runs_per_day}</span>
         <span>model: {agent.model}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        <Tabs defaultValue="runs">
+        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as string)}>
           <TabsList>
             <TabsTrigger value="runs">Runs</TabsTrigger>
             <TabsTrigger value="mission">Mission</TabsTrigger>
@@ -86,7 +150,7 @@ export function AgentDetail({ agentId, onBack }: AgentDetailProps) {
                 <div className="text-muted-foreground text-sm">Loading runs...</div>
               )}
               {!runsLoading && runs.length === 0 && (
-                <div className="text-muted-foreground text-sm">No runs yet</div>
+                <div className="text-muted-foreground text-sm">No runs yet. Click "Run now" to start one.</div>
               )}
               {runs.map((run) => (
                 <button
@@ -124,11 +188,61 @@ export function AgentDetail({ agentId, onBack }: AgentDetailProps) {
           </TabsContent>
 
           <TabsContent value="mission">
-            <Card className="mt-3">
+            <Card className="mt-3 relative">
               <CardContent>
-                <pre className="whitespace-pre-wrap font-display text-sm leading-relaxed">
-                  {agent.mission_md}
-                </pre>
+                {!editingMission && (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="absolute top-3 right-3"
+                    onClick={() => {
+                      setMissionDraft(agent.mission_md);
+                      setEditingMission(true);
+                      setMissionError(null);
+                    }}
+                  >
+                    <PencilIcon data-icon="inline-start" />
+                    Edit
+                  </Button>
+                )}
+                {editingMission ? (
+                  <div className="space-y-3">
+                    <Textarea
+                      rows={12}
+                      value={missionDraft}
+                      onChange={(e) => setMissionDraft(e.target.value)}
+                    />
+                    {missionError && (
+                      <p className="text-sm text-destructive animate-fade-in">{missionError}</p>
+                    )}
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCancelEdit}
+                        disabled={savingMission}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveMission}
+                        disabled={savingMission}
+                      >
+                        {savingMission ? "Saving..." : "Save"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <pre className="whitespace-pre-wrap font-display text-sm leading-relaxed">
+                      {agent.mission_md}
+                    </pre>
+                    {missionSuccess && (
+                      <p className="text-sm text-green-600 mt-2 animate-fade-in">Mission saved.</p>
+                    )}
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -136,7 +250,7 @@ export function AgentDetail({ agentId, onBack }: AgentDetailProps) {
           <TabsContent value="outputs">
             <div className="space-y-2 mt-3">
               {agent.outputs.length === 0 && (
-                <div className="text-muted-foreground text-sm">No outputs defined</div>
+                <div className="text-muted-foreground text-sm">No outputs configured for this agent</div>
               )}
               {agent.outputs.map((output) => (
                 <Card key={output.name}>

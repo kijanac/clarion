@@ -1,43 +1,41 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import type { AgentRun } from "@/lib/types";
+import type { TemplateDetail } from "@/lib/types";
 
-export function useRuns(agentId: string | null) {
-  const [runs, setRuns] = useState<AgentRun[]>([]);
+export function useTemplate(templateId: string | null) {
+  const [template, setTemplate] = useState<TemplateDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
-  const refetch = useCallback(() => {
-    setTick((t) => t + 1);
-  }, []);
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
-    if (!agentId) {
-      setRuns([]);
+    if (!templateId) {
+      setTemplate(null);
       setLoading(false);
       setError(null);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    apiFetch<AgentRun[]>(`/api/agents/${agentId}/runs`)
+    apiFetch<TemplateDetail>(`/api/templates/${templateId}`)
       .then((data) => {
         if (!cancelled) {
-          setRuns(data);
+          setTemplate(data);
           setError(null);
         }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Couldn't load runs");
+          setError(err instanceof Error ? err.message : "Couldn't load template");
         }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [agentId, tick]);
+  }, [templateId, tick]);
 
-  return { runs, loading, error, refetch };
+  return { template, loading, error, refetch };
 }

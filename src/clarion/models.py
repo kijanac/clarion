@@ -21,6 +21,24 @@ class RunStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class TriggerType(str, Enum):
+    CRON = "cron"
+    AGENT_OUTPUT = "agent_output"
+
+
+class TriggerDefinition(BaseModel):
+    """A condition that causes an agent to run."""
+
+    model_config = ConfigDict(frozen=True)
+
+    type: TriggerType
+    # cron
+    expression: str | None = None
+    # agent_output
+    source_agent: str | None = None
+    output_name: str | None = None
+
+
 class OutputTrigger(str, Enum):
     SCHEDULED = "scheduled"
     AGENT_DECIDES = "agent_decides"
@@ -68,8 +86,8 @@ class AgentConfig(BaseModel):
     owner: str
     version: int = Field(ge=1)
     template: str
-    schedule_cron: str
-    schedule_timezone: str
+    triggers: list[TriggerDefinition]
+    timezone: str = "UTC"
     outputs: list[OutputDefinition]
     database_enabled: bool
     resources: ResourceEnvelope

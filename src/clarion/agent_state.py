@@ -13,6 +13,16 @@ from clarion.models import AgentRun, ConversationTurn
 
 log = structlog.get_logger()
 
+_WORKSPACE_SUBDIRS = ("databases", "cron", "runs", "cache")
+
+
+def ensure_workspace(workspace_root: Path) -> Path:
+    """Create workspace directory structure if needed. Returns the root."""
+    workspace_root.mkdir(parents=True, exist_ok=True)
+    for subdir in _WORKSPACE_SUBDIRS:
+        (workspace_root / subdir).mkdir(exist_ok=True)
+    return workspace_root
+
 
 def record_run(run: AgentRun, workspace_root: Path) -> None:
     """Append a completed AgentRun to the agent's run history."""

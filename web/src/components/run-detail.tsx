@@ -151,7 +151,7 @@ export function RunDetailSheet({
         <SheetHeader>
           <SheetTitle>
             {loading && "Loading run..."}
-            {error && "Error loading run"}
+            {error && "Couldn't load run details"}
             {run && (
               <span className="font-mono text-sm">{run.run_id}</span>
             )}
@@ -206,7 +206,7 @@ export function RunDetailSheet({
           ) : (
             run && !loading && (
               <p className="text-sm text-muted-foreground py-8 text-center">
-                No step detail available for this run.
+                No activity recorded for this run.
               </p>
             )
           )}
