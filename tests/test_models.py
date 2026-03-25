@@ -43,7 +43,6 @@ def _make_agent_config(**overrides: object) -> AgentConfig:
         "version": 1,
         "template": "research",
         "triggers": [],
-        "timezone": "UTC",
         "outputs": [_make_output()],
         "database_enabled": False,
         "resources": ResourceEnvelope(),

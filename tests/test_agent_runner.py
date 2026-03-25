@@ -39,7 +39,6 @@ def _make_config(**overrides: object) -> AgentConfig:
         "version": 1,
         "template": "research",
         "triggers": [],
-        "timezone": "UTC",
         "outputs": [],
         "database_enabled": True,
         "resources": ResourceEnvelope(run_timeout_seconds=30),

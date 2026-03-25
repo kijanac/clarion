@@ -26,7 +26,6 @@ def _make_config(**overrides: object) -> AgentConfig:
         "version": 1,
         "template": "research",
         "triggers": [],
-        "timezone": "UTC",
         "outputs": [],
         "database_enabled": True,
         "resources": ResourceEnvelope(),
@@ -72,7 +71,7 @@ class TestFullPrompt:
         prompt = build_system_prompt(ctx)
 
         assert "Triggered by: manual" in prompt
-        assert "Timezone: UTC" in prompt
+        assert "UTC" in prompt
         assert "March 22, 2026" in prompt
 
 

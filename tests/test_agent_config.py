@@ -20,7 +20,7 @@ MINIMAL_AGENT_YAML = (
     "triggers:\n"
     '  - type: cron\n'
     '    expression: "0 */4 * * *"\n'
-    "timezone: UTC\n"
+    "    timezone: UTC\n"
     "database:\n"
     "  enabled: true\n"
     "outputs: []\n"
@@ -46,7 +46,6 @@ class TestLoadValidConfig:
         assert len(config.triggers) == 1
         assert config.triggers[0].type == TriggerType.CRON
         assert config.triggers[0].expression == "0 */4 * * *"
-        assert config.timezone == "UTC"
         assert config.database_enabled is True
         assert config.outputs == []
         assert config.tools == ["web_search", "execute_sql"]
@@ -130,10 +129,10 @@ class TestConfigErrors:
         yaml_text = (
             "template: research\n"
             "meta: {}\n"
-            "timezone: Not/A/Timezone\n"
             "triggers:\n"
             "  - type: cron\n"
             '    expression: "0 */4 * * *"\n'
+            "    timezone: Not/A/Timezone\n"
             "outputs: []\n"
         )
         (tmp_agent_dir / "agent.yaml").write_text(yaml_text)

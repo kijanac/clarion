@@ -22,7 +22,6 @@ from clarion.agent_config import (
     ConfigValidationError,
     load_agent_config,
     parse_triggers,
-    validate_timezone,
 )
 from clarion.agent_state import ensure_workspace, load_run_history, load_run_turns
 from clarion.models import AgentRun
@@ -36,8 +35,7 @@ class CreateAgentRequest(BaseModel):
     owner: str = Field(min_length=1, max_length=64)
     template: str = Field(min_length=1)
     mission: str = Field(min_length=1)
-    triggers: list[dict] = Field(default_factory=lambda: [{"type": "cron", "expression": "0 6 * * 1"}])
-    timezone: str = Field(default="UTC")
+    triggers: list[dict] = Field(default_factory=lambda: [{"type": "cron", "expression": "0 6 * * 1", "timezone": "UTC"}])
 
 
 class UpdateMissionRequest(BaseModel):
@@ -46,7 +44,6 @@ class UpdateMissionRequest(BaseModel):
 
 class UpdateAgentRequest(BaseModel):
     triggers: list[dict] | None = None
-    timezone: str | None = None
     description: str | None = None
     owner: str | None = None
 
@@ -59,16 +56,11 @@ class UpdateTemplateRequest(BaseModel):
     resources: dict[str, int] | None = None
 
 
-def _validate_inputs(
-    triggers: list[dict] | None = None,
-    timezone: str | None = None,
-) -> None:
-    """Validate trigger definitions and timezone, converting ConfigValidationError to HTTPException."""
+def _validate_inputs(triggers: list[dict] | None = None) -> None:
+    """Validate trigger definitions, converting ConfigValidationError to HTTPException."""
     try:
         if triggers is not None:
             parse_triggers(triggers)
-        if timezone is not None:
-            validate_timezone(timezone)
     except ConfigValidationError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -126,7 +118,6 @@ def create_app(
             "owner": config.owner,
             "template": config.template,
             "triggers": [t.model_dump() for t in config.triggers],
-            "timezone": config.timezone,
             "last_run_status": lr.status.value if lr else None,
             "last_run_at": lr.started_at.isoformat() if lr else None,
             "outputs_count": len(config.outputs),
@@ -282,7 +273,7 @@ def create_app(
         if not template_path.exists():
             raise HTTPException(400, f"Template '{req.template}' not found")
 
-        _validate_inputs(triggers=req.triggers, timezone=req.timezone)
+        _validate_inputs(triggers=req.triggers)
 
         agent_id = re.sub(r"[^a-z0-9]+", "-", req.name.lower()).strip("-")[:64]
         if not agent_id:
@@ -301,7 +292,6 @@ def create_app(
             },
             "template": req.template,
             "triggers": req.triggers,
-            "timezone": req.timezone,
             "database": {"enabled": True},
             "outputs": [],
             "resources": {},
@@ -337,15 +327,13 @@ def create_app(
     def update_agent(agent_id: str, req: UpdateAgentRequest):
         _load_config(agent_id)
 
-        _validate_inputs(triggers=req.triggers, timezone=req.timezone)
+        _validate_inputs(triggers=req.triggers)
 
         agent_yaml_path = agents_dir / agent_id / "agent.yaml"
         raw = yaml.safe_load(agent_yaml_path.read_text(encoding="utf-8"))
 
         if req.triggers is not None:
             raw["triggers"] = req.triggers
-        if req.timezone is not None:
-            raw["timezone"] = req.timezone
         if req.description is not None:
             raw.setdefault("meta", {})["description"] = req.description
         if req.owner is not None:

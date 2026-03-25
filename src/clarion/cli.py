@@ -134,7 +134,6 @@ async def _run_agent(agent_id: str):
         agent_config=config,
         workspace_root=workspace,
         delivery_adapters=adapters,
-        timezone=config.timezone,
     )
 
     run_id = new_run_id()
@@ -313,7 +312,7 @@ def register(
             trigger_strs.append(f"cron({t.expression})")
         elif t.type.value == "agent_output":
             trigger_strs.append(f"agent_output({t.source_agent}:{t.output_name})")
-    console.print(f"[green]✓[/green] triggers: {', '.join(trigger_strs) or 'none'} (tz={config.timezone})")
+    console.print(f"[green]✓[/green] triggers: {', '.join(trigger_strs) or 'none'}")
     console.print(f"[green]✓[/green] tools: {', '.join(config.tools)}")
     console.print(f"[green]✓[/green] outputs: {len(config.outputs)} defined")
 

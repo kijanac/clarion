@@ -34,6 +34,7 @@ class TriggerDefinition(BaseModel):
     type: TriggerType
     # cron
     expression: str | None = None
+    timezone: str = "UTC"
     # agent_output
     source_agent: str | None = None
     output_name: str | None = None
@@ -87,7 +88,6 @@ class AgentConfig(BaseModel):
     version: int = Field(ge=1)
     template: str
     triggers: list[TriggerDefinition]
-    timezone: str = "UTC"
     outputs: list[OutputDefinition]
     database_enabled: bool
     resources: ResourceEnvelope

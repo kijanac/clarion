@@ -15,6 +15,7 @@ export interface TemplateDetail extends Template {
 export interface TriggerDefinition {
   type: "cron" | "agent_output";
   expression?: string;
+  timezone?: string;
   source_agent?: string;
   output_name?: string;
 }
@@ -26,7 +27,6 @@ export interface AgentSummary {
   owner: string;
   template: string;
   triggers: TriggerDefinition[];
-  timezone: string;
   last_run_status: string | null;
   last_run_at: string | null;
   outputs_count: number;

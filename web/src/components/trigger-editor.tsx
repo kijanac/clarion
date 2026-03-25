@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SchedulePicker } from "@/components/schedule-picker";
+import { TimezonePicker } from "@/components/timezone-picker";
 import { XIcon, PlusIcon } from "lucide-react";
 
 interface TriggerEditorProps {
@@ -43,12 +44,21 @@ function TriggerCard({
             </div>
 
             {trigger.type === "cron" && (
-              <SchedulePicker
-                cron={trigger.expression ?? ""}
-                onCronChange={(expression) =>
-                  onUpdate(index, { ...trigger, expression })
-                }
-              />
+              <div className="space-y-3">
+                <SchedulePicker
+                  cron={trigger.expression ?? ""}
+                  onCronChange={(expression) =>
+                    onUpdate(index, { ...trigger, expression })
+                  }
+                />
+                <div className="space-y-1.5">
+                  <Label>Timezone</Label>
+                  <TimezonePicker
+                    value={trigger.timezone ?? "UTC"}
+                    onChange={(tz) => onUpdate(index, { ...trigger, timezone: tz })}
+                  />
+                </div>
+              </div>
             )}
 
             {trigger.type === "agent_output" && (
@@ -122,7 +132,7 @@ export function TriggerEditor({ triggers, onChange, agents }: TriggerEditorProps
     (type: "cron" | "agent_output") => {
       const newTrigger: TriggerDefinition =
         type === "cron"
-          ? { type: "cron", expression: "0 6 * * 1" }
+          ? { type: "cron", expression: "0 6 * * 1", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }
           : { type: "agent_output", source_agent: "", output_name: "" };
       onChange([...triggers, newTrigger]);
     },

@@ -48,8 +48,7 @@ def _build_run_context(context: RunContext) -> str:
     lines.append("## This Run")
     lines.append(f"- Run ID: {context.run_id}")
     lines.append(f"- Triggered by: {context.trigger}")
-    lines.append(f"- Current time: {_format_datetime(context.current_datetime)}")
-    lines.append(f"- Timezone: {config.timezone}")
+    lines.append(f"- Current time: {_format_datetime(context.current_datetime)} UTC")
 
     # Scheduled outputs — must be produced this run
     scheduled = [o for o in config.outputs if o.trigger == OutputTrigger.SCHEDULED]

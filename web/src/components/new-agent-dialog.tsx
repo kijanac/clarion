@@ -18,7 +18,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { TriggerEditor } from "@/components/trigger-editor";
-import { TimezonePicker } from "@/components/timezone-picker";
 import { cn } from "@/lib/utils";
 
 interface NewAgentDialogProps {
@@ -33,7 +32,6 @@ interface FormData {
   owner: string;
   mission: string;
   triggers: TriggerDefinition[];
-  timezone: string;
 }
 
 function initialFormData(): FormData {
@@ -42,8 +40,7 @@ function initialFormData(): FormData {
     name: "",
     owner: "",
     mission: "",
-    triggers: [{ type: "cron", expression: "0 6 * * 1" }],
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    triggers: [{ type: "cron", expression: "0 6 * * 1", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }],
   };
 }
 
@@ -170,14 +167,6 @@ function StepConfigure({
         agents={existingAgents}
       />
 
-      <div className="space-y-1.5">
-        <Label>Timezone</Label>
-        <TimezonePicker
-          value={form.timezone}
-          onChange={(tz) => onChange({ timezone: tz })}
-        />
-      </div>
-
       <Card className="bg-muted/30">
         <CardContent className="space-y-2">
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -192,14 +181,6 @@ function StepConfigure({
           <p className="text-xs text-muted-foreground leading-relaxed">
             {missionPreview}
           </p>
-          <div className="border-t pt-2 mt-2 space-y-1">
-            <p className="text-xs text-muted-foreground">
-              Config (agent.yaml) generated automatically
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Mission text saved to mission.md
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>
@@ -238,7 +219,6 @@ export function NewAgentDialog({ open, onOpenChange, onCreated }: NewAgentDialog
         template: form.templateId,
         mission: form.mission.trim(),
         triggers: form.triggers,
-        timezone: form.timezone.trim(),
       });
       onCreated(result.id);
       onOpenChange(false);

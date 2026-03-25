@@ -20,10 +20,10 @@ MINIMAL_AGENT_YAML = (
     "  description: A test agent\n"
     "  owner: test-owner\n"
     "  version: 1\n"
-    "timezone: UTC\n"
     "triggers:\n"
     '  - type: cron\n'
     '    expression: "0 */4 * * *"\n'
+    "    timezone: UTC\n"
     "database:\n"
     "  enabled: true\n"
     "outputs: []\n"

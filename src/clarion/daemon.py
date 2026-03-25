@@ -110,7 +110,7 @@ class Daemon:
                 job_id = f"{agent_id}__cron_{i}"
                 cron_trigger = CronTrigger.from_crontab(
                     trigger.expression,
-                    timezone=config.timezone,
+                    timezone=trigger.timezone,
                 )
                 self._scheduler.add_job(
                     self._emit_cron_event,
@@ -123,7 +123,7 @@ class Daemon:
                     "daemon.cron_registered",
                     agent_id=agent_id,
                     expression=trigger.expression,
-                    timezone=config.timezone,
+                    timezone=trigger.timezone,
                 )
 
     def _remove_scheduler_jobs(self, agent_id: str) -> None:
@@ -218,7 +218,6 @@ class Daemon:
             agent_config=context.config,
             workspace_root=Path(context.workspace_root),
             delivery_adapters=adapters,
-            timezone=context.config.timezone,
         )
 
         result = await run_agent(context, llm_client, executor)
@@ -276,9 +275,7 @@ class Daemon:
         if new_config is None:
             return
 
-        triggers_changed = old_config is None or old_config.triggers != new_config.triggers
-        timezone_changed = old_config is None or old_config.timezone != new_config.timezone
-        if triggers_changed or timezone_changed:
+        if old_config is None or old_config.triggers != new_config.triggers:
             self._remove_scheduler_jobs(agent_id)
             self._register_agent(agent_id, new_config)
             log.info("daemon.triggers_updated", agent_id=agent_id)

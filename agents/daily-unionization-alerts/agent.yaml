@@ -5,11 +5,11 @@ meta:
   version: 1
 
 template: research
-timezone: America/New_York
 
 triggers:
   - type: cron
     expression: "0 6 * * *"  # every morning at 06:00
+    timezone: America/New_York
 
 database:
   enabled: true

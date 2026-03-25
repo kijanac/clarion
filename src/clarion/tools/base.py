@@ -29,7 +29,6 @@ class ToolContext:
     agent_config: "AgentConfig"
     delivery_adapters: "dict[OutputType, DeliveryAdapter]"
     fetch_cache: "FetchCache | None"
-    timezone: str
     correlation_id: str
 
 

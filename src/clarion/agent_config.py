@@ -62,9 +62,7 @@ def load_agent_config(
     owner = meta.get("owner", "")
     version = meta.get("version", 1)
 
-    # 5. Triggers + timezone
-    timezone = raw.get("timezone", "UTC")
-    validate_timezone(timezone)
+    # 5. Triggers
     raw_triggers = raw.get("triggers", [])
     if not isinstance(raw_triggers, list):
         raise ConfigValidationError("'triggers' must be a list")
@@ -113,7 +111,6 @@ def load_agent_config(
         version=version,
         template=template_name,
         triggers=triggers,
-        timezone=timezone,
         outputs=outputs,
         database_enabled=database_enabled,
         resources=resources,
@@ -229,7 +226,9 @@ def parse_triggers(raw_triggers: list[Any]) -> list[TriggerDefinition]:
             if not expression:
                 raise ConfigValidationError("Cron trigger must have an 'expression'")
             validate_cron(expression)
-            triggers.append(TriggerDefinition(type=trigger_type, expression=expression))
+            tz = raw.get("timezone", "UTC")
+            validate_timezone(tz)
+            triggers.append(TriggerDefinition(type=trigger_type, expression=expression, timezone=tz))
 
         elif trigger_type == TriggerType.AGENT_OUTPUT:
             source_agent = raw.get("source_agent", "")

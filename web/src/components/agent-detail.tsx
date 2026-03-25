@@ -131,7 +131,6 @@ export function AgentDetail({ agentId, onBack }: AgentDetailProps) {
               : `when ${trigger.source_agent} produces ${trigger.output_name}`}
           </span>
         ))}
-        {agent.timezone && <span>timezone: {agent.timezone}</span>}
         <span>runs today: {agent.runs_today}/{agent.max_runs_per_day}</span>
         <span>model: {agent.model}</span>
       </div>
