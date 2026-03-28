@@ -80,7 +80,10 @@ def load_agent_config(
         raw.get("resources", {}),
     )
 
-    # 8. Database
+    # 8. Enabled flag
+    enabled = raw.get("enabled", True)
+
+    # 9. Database
     database_section = raw.get("database", {})
     if not isinstance(database_section, dict):
         raise ConfigValidationError("'database' must be a mapping")
@@ -111,6 +114,7 @@ def load_agent_config(
         version=version,
         template=template_name,
         triggers=triggers,
+        enabled=enabled,
         outputs=outputs,
         database_enabled=database_enabled,
         resources=resources,

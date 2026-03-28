@@ -27,6 +27,7 @@ export interface AgentSummary {
   owner: string;
   template: string;
   triggers: TriggerDefinition[];
+  enabled: boolean;
   last_run_status: string | null;
   last_run_at: string | null;
   outputs_count: number;

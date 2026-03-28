@@ -88,6 +88,7 @@ class AgentConfig(BaseModel):
     version: int = Field(ge=1)
     template: str
     triggers: list[TriggerDefinition]
+    enabled: bool = True
     outputs: list[OutputDefinition]
     database_enabled: bool
     resources: ResourceEnvelope

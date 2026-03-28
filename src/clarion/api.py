@@ -44,6 +44,7 @@ class UpdateMissionRequest(BaseModel):
 
 class UpdateAgentRequest(BaseModel):
     triggers: list[dict] | None = None
+    enabled: bool | None = None
     description: str | None = None
     owner: str | None = None
 
@@ -120,6 +121,7 @@ def create_app(
             "triggers": [t.model_dump() for t in config.triggers],
             "last_run_status": lr.status.value if lr else None,
             "last_run_at": lr.started_at.isoformat() if lr else None,
+            "enabled": config.enabled,
             "outputs_count": len(config.outputs),
             "runs_today": runs_today,
             "max_runs_per_day": config.resources.max_runs_per_day,
@@ -334,6 +336,8 @@ def create_app(
 
         if req.triggers is not None:
             raw["triggers"] = req.triggers
+        if req.enabled is not None:
+            raw["enabled"] = req.enabled
         if req.description is not None:
             raw.setdefault("meta", {})["description"] = req.description
         if req.owner is not None:
@@ -351,6 +355,29 @@ def create_app(
             templates_dir=templates_dir,
         )
         return _agent_summary(agent_id, config)
+
+    @app.delete("/api/agents/{agent_id}")
+    def delete_agent(agent_id: str):
+        _load_config(agent_id)
+
+        # Soft-delete: move to trash instead of rm -rf
+        trash_dir = data_root / "trash"
+        trash_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        trash_name = f"{agent_id}__{timestamp}"
+
+        # Move agent config
+        agent_dir = agents_dir / agent_id
+        agent_dir.rename(trash_dir / f"{trash_name}__config")
+
+        # Move workspace if it exists
+        ws = _workspace(agent_id)
+        if ws.exists():
+            ws.rename(trash_dir / f"{trash_name}__data")
+
+        log.info("api.agent_deleted", agent_id=agent_id, trash=trash_name)
+        return {"status": "deleted", "agent_id": agent_id}
 
     # ── Static files (production) ────────────────────────────────────────
 

@@ -28,13 +28,18 @@ export function AgentCard({ agent, selected, onSelect }: AgentCardProps) {
       )}
     >
       <div className="flex items-center gap-2 mb-1">
-        <StatusDot status={agent.last_run_status} />
-        <span className="font-display text-sm truncate">{agent.name}</span>
+        <StatusDot status={agent.enabled ? agent.last_run_status : "paused"} />
+        <span className={cn("font-display text-sm truncate", !agent.enabled && "opacity-50")}>{agent.name}</span>
       </div>
       <div className="flex items-center gap-1.5 mb-2">
         <Badge variant="outline" className="text-[10px]">
           {agent.template}
         </Badge>
+        {!agent.enabled && (
+          <Badge variant="secondary" className="text-[10px] text-muted-foreground">
+            paused
+          </Badge>
+        )}
       </div>
       <div className="text-xs text-muted-foreground font-mono space-y-0.5">
         <div className="truncate">{agent.owner}</div>

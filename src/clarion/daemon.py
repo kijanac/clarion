@@ -64,7 +64,10 @@ class Daemon:
         log.info("daemon.scan_complete", agents=len(agents))
 
         for agent_id, config in agents.items():
-            self._register_agent(agent_id, config)
+            if config.enabled:
+                self._register_agent(agent_id, config)
+            else:
+                log.info("daemon.agent_paused", agent_id=agent_id)
 
         self._scheduler.start()
         self._bus_task = asyncio.create_task(self._event_bus.run())
@@ -178,6 +181,10 @@ class Daemon:
             log.warning("daemon.fire_skip", agent_id=agent_id, reason="not registered")
             return
 
+        if not config.enabled:
+            log.info("daemon.fire_skip", agent_id=agent_id, reason="paused")
+            return
+
         if not self._can_run(agent_id):
             return
 
@@ -275,7 +282,16 @@ class Daemon:
         if new_config is None:
             return
 
-        if old_config is None or old_config.triggers != new_config.triggers:
+        needs_reregister = (
+            old_config is None
+            or old_config.triggers != new_config.triggers
+            or old_config.enabled != new_config.enabled
+        )
+        if needs_reregister:
             self._remove_scheduler_jobs(agent_id)
-            self._register_agent(agent_id, new_config)
-            log.info("daemon.triggers_updated", agent_id=agent_id)
+            self._event_bus.unregister(agent_id)
+            if new_config.enabled:
+                self._register_agent(agent_id, new_config)
+                log.info("daemon.agent_resumed", agent_id=agent_id)
+            else:
+                log.info("daemon.agent_paused", agent_id=agent_id)

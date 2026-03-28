@@ -202,6 +202,7 @@ function App() {
               key={view.id}
               agentId={view.id}
               onBack={() => setView({ kind: "empty" })}
+              onDeleted={() => { setView({ kind: "empty" }); refetch(); }}
             />
           )}
           {view.kind === "template" && (

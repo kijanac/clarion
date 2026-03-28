@@ -1,23 +1,41 @@
 import { useState, useCallback } from "react";
 import { useAgent } from "@/hooks/use-agent";
 import { useRuns } from "@/hooks/use-runs";
-import { apiPost, apiPut } from "@/lib/api";
+import { apiPost, apiPut, apiDelete } from "@/lib/api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { RunDetailSheet } from "@/components/run-detail";
 import { StatusDot } from "@/components/status-dot";
 import { formatTime, formatDuration, statusColor, humanCron } from "@/lib/format";
-import { ArrowLeftIcon, PlayIcon, PencilIcon } from "lucide-react";
+import { ArrowLeftIcon, PlayIcon, PencilIcon, MoreVerticalIcon, PauseIcon, TrashIcon } from "lucide-react";
 
 interface AgentDetailProps {
   agentId: string;
   onBack: () => void;
+  onDeleted: () => void;
 }
 
-export function AgentDetail({ agentId, onBack }: AgentDetailProps) {
+export function AgentDetail({ agentId, onBack, onDeleted }: AgentDetailProps) {
   const { agent, loading, error, refetch: refetchAgent } = useAgent(agentId);
   const { runs, loading: runsLoading, refetch: refetchRuns } = useRuns(agentId);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -28,6 +46,30 @@ export function AgentDetail({ agentId, onBack }: AgentDetailProps) {
   const [savingMission, setSavingMission] = useState(false);
   const [missionSuccess, setMissionSuccess] = useState(false);
   const [missionError, setMissionError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [togglingPause, setTogglingPause] = useState(false);
+
+  const handleTogglePause = useCallback(async () => {
+    if (!agent) return;
+    setTogglingPause(true);
+    try {
+      await apiPut(`/api/agents/${agentId}`, { enabled: !agent.enabled });
+      refetchAgent();
+    } catch {
+      // Will show updated state on next refetch
+    } finally {
+      setTogglingPause(false);
+    }
+  }, [agentId, agent, refetchAgent]);
+
+  const handleDelete = useCallback(async () => {
+    try {
+      await apiDelete(`/api/agents/${agentId}`);
+      onDeleted();
+    } catch {
+      // Error shown by ApiError
+    }
+  }, [agentId, onDeleted]);
 
   const handleRunNow = useCallback(async () => {
     setRunningNow(true);
@@ -96,17 +138,41 @@ export function AgentDetail({ agentId, onBack }: AgentDetailProps) {
             {agent.last_run_status}
           </Badge>
         )}
-        <div className="ml-auto">
+        {!agent.enabled && (
+          <Badge variant="secondary" className="text-muted-foreground">paused</Badge>
+        )}
+        <div className="ml-auto flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
             className="text-primary"
             onClick={handleRunNow}
-            disabled={runningNow}
+            disabled={runningNow || !agent.enabled}
           >
             <PlayIcon data-icon="inline-start" />
             {runningNow ? "Running..." : "Run now"}
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button variant="ghost" size="icon-sm" />}
+            >
+              <MoreVerticalIcon />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleTogglePause} disabled={togglingPause}>
+                <PauseIcon className="mr-2 size-4" />
+                {agent.enabled ? "Pause agent" : "Resume agent"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                <TrashIcon className="mr-2 size-4" />
+                Delete agent
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -285,6 +351,26 @@ export function AgentDetail({ agentId, onBack }: AgentDetailProps) {
           if (!open) setSelectedRunId(null);
         }}
       />
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {agent.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the agent and all its run history. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

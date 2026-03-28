@@ -8,6 +8,8 @@ export function StatusDot({ status }: { status: string | null }) {
         ? "bg-red-500"
         : status === "running"
           ? "bg-amber-500 animate-pulse"
-          : "bg-muted-foreground";
+          : status === "paused"
+            ? "bg-muted-foreground/50"
+            : "bg-muted-foreground";
   return <span className={cn("inline-block size-2 rounded-full shrink-0", colorClass)} />;
 }
