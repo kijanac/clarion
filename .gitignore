@@ -31,3 +31,4 @@ deploy/group_vars/all/secrets.yml
 # Secrets
 .secrets/
 *.env
+next-app/

@@ -189,7 +189,8 @@ export function AgentDetail({ agentId, onBack, onDeleted }: AgentDetailProps) {
       )}
 
       <div className="flex items-center gap-4 px-4 py-2 text-xs text-muted-foreground border-b flex-wrap">
-        <span>owner: {agent.owner}</span>
+        <span>{agent.owner}</span>
+        <span className="text-border">·</span>
         {agent.triggers.map((trigger, i) => (
           <span key={i}>
             {trigger.type === "cron" && trigger.expression
@@ -197,8 +198,8 @@ export function AgentDetail({ agentId, onBack, onDeleted }: AgentDetailProps) {
               : `when ${trigger.source_agent} produces ${trigger.output_name}`}
           </span>
         ))}
-        <span>runs today: {agent.runs_today}/{agent.max_runs_per_day}</span>
-        <span>model: {agent.model}</span>
+        <span className="text-border">·</span>
+        <span>{agent.runs_today}/{agent.max_runs_per_day} runs today</span>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -298,7 +299,7 @@ export function AgentDetail({ agentId, onBack, onDeleted }: AgentDetailProps) {
                       </Button>
                     </div>
                   </div>
-                ) : (
+                ) : agent.mission_md?.trim() ? (
                   <>
                     <pre className="whitespace-pre-wrap font-display text-sm leading-relaxed">
                       {agent.mission_md}
@@ -307,6 +308,10 @@ export function AgentDetail({ agentId, onBack, onDeleted }: AgentDetailProps) {
                       <p className="text-sm text-green-600 mt-2 animate-fade-in">Mission saved.</p>
                     )}
                   </>
+                ) : (
+                  <p className="text-sm text-muted-foreground py-4">
+                    No mission defined yet. Click Edit to describe what this agent should do.
+                  </p>
                 )}
               </CardContent>
             </Card>

@@ -1,8 +1,8 @@
 import { useCallback } from "react";
+import { useAgent } from "@/hooks/use-agent";
 import type { TriggerDefinition, AgentSummary } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -15,10 +15,77 @@ import { SchedulePicker } from "@/components/schedule-picker";
 import { TimezonePicker } from "@/components/timezone-picker";
 import { XIcon, PlusIcon } from "lucide-react";
 
-interface TriggerEditorProps {
-  triggers: TriggerDefinition[];
-  onChange: (triggers: TriggerDefinition[]) => void;
+function AgentOutputFields({
+  trigger,
+  index,
+  onUpdate,
+  agents,
+}: {
+  trigger: TriggerDefinition;
+  index: number;
+  onUpdate: (index: number, trigger: TriggerDefinition) => void;
   agents: AgentSummary[];
+}) {
+  const { agent: sourceAgent } = useAgent(trigger.source_agent || null);
+  const availableOutputs = sourceAgent?.outputs ?? [];
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label>Source agent</Label>
+        <Select
+          value={trigger.source_agent ?? ""}
+          onValueChange={(value) =>
+            onUpdate(index, { ...trigger, source_agent: value ?? "", output_name: "" })
+          }
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select an agent..." />
+          </SelectTrigger>
+          <SelectContent>
+            {agents.map((agent) => (
+              <SelectItem key={agent.id} value={agent.id}>
+                {agent.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Output</Label>
+        {availableOutputs.length > 0 ? (
+          <Select
+            value={trigger.output_name ?? ""}
+            onValueChange={(value) =>
+              onUpdate(index, { ...trigger, output_name: value ?? "" })
+            }
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select an output..." />
+            </SelectTrigger>
+            <SelectContent>
+              {availableOutputs.map((output) => (
+                <SelectItem key={output.name} value={output.name}>
+                  {output.name}
+                  {output.description && (
+                    <span className="text-muted-foreground ml-2">— {output.description}</span>
+                  )}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : trigger.source_agent ? (
+          <p className="text-xs text-muted-foreground py-1">
+            This agent has no outputs configured.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground py-1">
+            Select a source agent first.
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function TriggerCard({
@@ -62,39 +129,12 @@ function TriggerCard({
             )}
 
             {trigger.type === "agent_output" && (
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label>Source agent</Label>
-                  <Select
-                    value={trigger.source_agent ?? ""}
-                    onValueChange={(value) =>
-                      onUpdate(index, { ...trigger, source_agent: value ?? "" })
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select an agent..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {agents.map((agent) => (
-                        <SelectItem key={agent.id} value={agent.id}>
-                          {agent.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`output-name-${index}`}>Output name</Label>
-                  <Input
-                    id={`output-name-${index}`}
-                    value={trigger.output_name ?? ""}
-                    onChange={(e) =>
-                      onUpdate(index, { ...trigger, output_name: e.target.value })
-                    }
-                    placeholder="e.g. weekly-briefing"
-                  />
-                </div>
-              </div>
+              <AgentOutputFields
+                trigger={trigger}
+                index={index}
+                onUpdate={onUpdate}
+                agents={agents}
+              />
             )}
           </div>
 
@@ -110,6 +150,12 @@ function TriggerCard({
       </CardContent>
     </Card>
   );
+}
+
+interface TriggerEditorProps {
+  triggers: TriggerDefinition[];
+  onChange: (triggers: TriggerDefinition[]) => void;
+  agents: AgentSummary[];
 }
 
 export function TriggerEditor({ triggers, onChange, agents }: TriggerEditorProps) {
