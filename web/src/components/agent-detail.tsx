@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useAgent } from "@/hooks/use-agent";
 import { useRuns } from "@/hooks/use-runs";
 import { apiPost, apiPut, apiDelete } from "@/lib/api";
@@ -26,8 +26,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { RunDetailSheet } from "@/components/run-detail";
 import { StatusDot } from "@/components/status-dot";
-import { formatTime, formatDuration, statusColor, humanCron } from "@/lib/format";
-import { ArrowLeftIcon, PlayIcon, PencilIcon, MoreVerticalIcon, PauseIcon, TrashIcon } from "lucide-react";
+import { formatTime, formatDuration, statusColor, formatTriggerSummary } from "@/lib/format";
+import { ArrowLeftIcon, PlayIcon, PencilIcon, MoreVerticalIcon, PauseIcon, PlayCircleIcon, TrashIcon } from "lucide-react";
 
 interface AgentDetailProps {
   agentId: string;
@@ -48,6 +48,21 @@ export function AgentDetail({ agentId, onBack, onDeleted }: AgentDetailProps) {
   const [missionError, setMissionError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [togglingPause, setTogglingPause] = useState(false);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    return () => {
+      for (const id of timersRef.current) clearTimeout(id);
+    };
+  }, []);
+
+  const safeTimeout = useCallback((fn: () => void, ms: number) => {
+    const id = setTimeout(() => {
+      timersRef.current = timersRef.current.filter((t) => t !== id);
+      fn();
+    }, ms);
+    timersRef.current.push(id);
+  }, []);
 
   const handleTogglePause = useCallback(async () => {
     if (!agent) return;
@@ -76,7 +91,7 @@ export function AgentDetail({ agentId, onBack, onDeleted }: AgentDetailProps) {
     try {
       await apiPost(`/api/agents/${agentId}/run`, {});
       setActiveTab("runs");
-      setTimeout(() => {
+      safeTimeout(() => {
         refetchRuns();
         setRunningNow(false);
       }, 2000);
@@ -93,7 +108,7 @@ export function AgentDetail({ agentId, onBack, onDeleted }: AgentDetailProps) {
       setEditingMission(false);
       setMissionSuccess(true);
       refetchAgent();
-      setTimeout(() => setMissionSuccess(false), 3000);
+      safeTimeout(() => setMissionSuccess(false), 3000);
     } catch (err: unknown) {
       setMissionError(err instanceof Error ? err.message : "Couldn't save mission. Try again.");
     } finally {
@@ -160,8 +175,10 @@ export function AgentDetail({ agentId, onBack, onDeleted }: AgentDetailProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={handleTogglePause} disabled={togglingPause}>
-                <PauseIcon className="mr-2 size-4" />
-                {agent.enabled ? "Pause agent" : "Resume agent"}
+                {agent.enabled
+                  ? <><PauseIcon className="mr-2 size-4" />Pause agent</>
+                  : <><PlayCircleIcon className="mr-2 size-4" />Resume agent</>
+                }
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -191,13 +208,7 @@ export function AgentDetail({ agentId, onBack, onDeleted }: AgentDetailProps) {
       <div className="flex items-center gap-4 px-4 py-2 text-xs text-muted-foreground border-b flex-wrap">
         <span>{agent.owner}</span>
         <span className="text-border">·</span>
-        {agent.triggers.map((trigger, i) => (
-          <span key={i}>
-            {trigger.type === "cron" && trigger.expression
-              ? humanCron(trigger.expression)
-              : `when ${trigger.source_agent} produces ${trigger.output_name}`}
-          </span>
-        ))}
+        <span>{formatTriggerSummary(agent.triggers)}</span>
         <span className="text-border">·</span>
         <span>{agent.runs_today}/{agent.max_runs_per_day} runs today</span>
       </div>
@@ -362,7 +373,7 @@ export function AgentDetail({ agentId, onBack, onDeleted }: AgentDetailProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {agent.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the agent and all its run history. This action cannot be undone.
+              This will remove the agent from Clarion, including its run history and data.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

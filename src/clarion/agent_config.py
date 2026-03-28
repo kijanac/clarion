@@ -35,7 +35,7 @@ def load_agent_config(
     templates_dir: Path | None = None,
 ) -> AgentConfig:
     """Load, validate, and return a fully resolved AgentConfig."""
-    # 1. Read agent.yaml
+    # Read agent.yaml
     agent_yaml = agent_dir / "agent.yaml"
     if not agent_yaml.exists():
         raise ConfigValidationError(f"No agent.yaml found in {agent_dir}")

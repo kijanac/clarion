@@ -23,7 +23,7 @@ from clarion.agent_config import (
     load_agent_config,
     parse_triggers,
 )
-from clarion.agent_state import ensure_workspace, load_run_history, load_run_turns
+from clarion.agent_state import count_runs_since, ensure_workspace, last_run, load_run_history, load_run_turns
 from clarion.models import AgentRun
 
 log = structlog.get_logger()
@@ -105,13 +105,11 @@ def create_app(
         except ConfigValidationError as exc:
             raise HTTPException(500, f"Agent '{agent_id}' has invalid config: {exc}") from exc
 
-    def _agent_summary(agent_id: str, config: Any, runs: list[AgentRun] | None = None) -> dict:
-        if runs is None:
-            ws = _workspace(agent_id)
-            runs = load_run_history(ws, limit=100)
-        lr = runs[0] if runs else None
+    def _agent_summary(agent_id: str, config: Any) -> dict:
+        ws = _workspace(agent_id)
+        lr = last_run(ws)
         today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        runs_today = sum(1 for r in runs if r.started_at >= today_start)
+        runs_today = count_runs_since(ws, since=today_start)
         return {
             "id": agent_id,
             "name": config.name,
@@ -160,16 +158,15 @@ def create_app(
     def get_agent(agent_id: str):
         config = _load_config(agent_id)
         ws = _workspace(agent_id)
-        runs = load_run_history(ws, limit=100)
 
         mission_md = ""
         mission_path = ws / "mission.md"
         if mission_path.exists():
             mission_md = mission_path.read_text(encoding="utf-8")
 
-        lr = runs[0] if runs else None
+        lr = last_run(ws)
         return {
-            **_agent_summary(agent_id, config, runs),
+            **_agent_summary(agent_id, config),
             "mission_md": mission_md,
             "outputs": [o.model_dump() for o in config.outputs],
             "resources": config.resources.model_dump(),
@@ -360,7 +357,11 @@ def create_app(
     def delete_agent(agent_id: str):
         _load_config(agent_id)
 
-        # Soft-delete: move to trash instead of rm -rf
+        if daemon is not None:
+            active = [k for k in daemon._active_runs if k.startswith(f"{agent_id}-")]
+            if active:
+                raise HTTPException(409, "Agent has a run in progress. Wait for it to finish before deleting.")
+
         trash_dir = data_root / "trash"
         trash_dir.mkdir(parents=True, exist_ok=True)
 
