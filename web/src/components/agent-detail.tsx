@@ -75,12 +75,12 @@ export function AgentDetail({ agentId, onBack, onDeleted }: AgentDetailProps) {
     setRunningNow(true);
     try {
       await apiPost(`/api/agents/${agentId}/run`, {});
+      setActiveTab("runs");
       setTimeout(() => {
         refetchRuns();
+        setRunningNow(false);
       }, 2000);
     } catch {
-      // Run trigger failed silently — the run list will reflect the state
-    } finally {
       setRunningNow(false);
     }
   }, [agentId, refetchRuns]);

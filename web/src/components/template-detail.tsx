@@ -5,6 +5,11 @@ import type { TemplateDetail } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -260,25 +265,32 @@ export function TemplateDetailView({ templateId, onBack }: TemplateDetailProps) 
         <Separator />
 
         {/* System prompt */}
-        <div className="space-y-1.5">
-          <Label>System prompt</Label>
-          {editing ? (
+        {editing ? (
+          <div className="space-y-1.5">
+            <Label>System prompt</Label>
             <Textarea
               value={draftPrompt}
               onChange={(e) => setDraftPrompt(e.target.value)}
               rows={20}
               className="font-mono text-xs"
             />
-          ) : (
-            <Card className="bg-muted/20">
-              <CardContent>
-                <pre className="whitespace-pre-wrap text-xs font-mono text-muted-foreground leading-relaxed">
-                  {template.system_prompt}
-                </pre>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+          </div>
+        ) : (
+          <Collapsible>
+            <CollapsibleTrigger className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              Show system prompt
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <Card className="bg-muted/20 mt-2">
+                <CardContent>
+                  <pre className="whitespace-pre-wrap text-xs font-mono text-muted-foreground leading-relaxed">
+                    {template.system_prompt}
+                  </pre>
+                </CardContent>
+              </Card>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
       </div>
     </div>
   );
