@@ -12,11 +12,11 @@ export class ApiError extends Error {
 }
 
 function friendlyMessage(status: number): string {
-  if (status === 404) return "Not found. It may have been removed.";
-  if (status === 409) return "Already exists. Try a different name.";
-  if (status === 503) return "This feature requires the daemon to be running.";
-  if (status >= 500) return "Something went wrong. Try refreshing, or contact your admin if the problem persists.";
-  if (status === 400) return "Invalid input. Check the form and try again.";
+  if (status === 404) return "We couldn't find this agent. It may have been removed.";
+  if (status === 409) return "An agent with this name already exists. Try a different name.";
+  if (status === 503) return "Running agents isn't available in this mode. Ask your admin to enable it.";
+  if (status >= 500) return "Something went wrong. Try refreshing the page, or contact your admin for help.";
+  if (status === 400) return "Invalid input. Please check the form and try again.";
   return "Something went wrong. Try again.";
 }
 
@@ -35,7 +35,7 @@ async function apiRequest<T>(
   try {
     res = await fetch(`${BASE}${path}`, init);
   } catch {
-    throw new ApiError(0, "Couldn't reach the server. Check your connection and try refreshing.", "Network error");
+    throw new ApiError(0, "Can't connect to the server. Check your internet connection or try again in a moment.", "Network error");
   }
 
   if (!res.ok) {
