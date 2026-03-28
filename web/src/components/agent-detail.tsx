@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { RunDetailSheet } from "@/components/run-detail";
 import { StatusDot } from "@/components/status-dot";
-import { formatTime, formatDuration, statusColor } from "@/lib/format";
+import { formatTime, formatDuration, statusColor, humanCron } from "@/lib/format";
 import { ArrowLeftIcon, PlayIcon, PencilIcon } from "lucide-react";
 
 interface AgentDetailProps {
@@ -126,8 +126,8 @@ export function AgentDetail({ agentId, onBack }: AgentDetailProps) {
         <span>owner: {agent.owner}</span>
         {agent.triggers.map((trigger, i) => (
           <span key={i}>
-            {trigger.type === "cron"
-              ? `cron: ${trigger.expression}`
+            {trigger.type === "cron" && trigger.expression
+              ? humanCron(trigger.expression)
               : `when ${trigger.source_agent} produces ${trigger.output_name}`}
           </span>
         ))}

@@ -7,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { humanCron } from "@/lib/format";
 
 const PRESETS = [
   { id: "weekday-morning", label: "Every weekday morning", cron: "0 6 * * 1-5" },
@@ -63,16 +64,12 @@ export function SchedulePicker({ cron, onCronChange }: SchedulePickerProps) {
             placeholder="0 6 * * 1"
             className="font-mono"
           />
-          <p className="text-[10px] text-muted-foreground">
-            minute hour day month weekday — e.g. 0 9 * * 1-5 = weekdays at 9am
-          </p>
+          {cron && (
+            <p className="text-xs text-muted-foreground">
+              {humanCron(cron)}
+            </p>
+          )}
         </div>
-      )}
-
-      {presetId !== "custom" && matchedPreset && (
-        <p className="text-xs text-muted-foreground font-mono">
-          {matchedPreset.cron}
-        </p>
       )}
     </div>
   );

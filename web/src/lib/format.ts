@@ -1,3 +1,5 @@
+import cronstrue from "cronstrue";
+
 export function formatTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString("en-US", {
@@ -33,10 +35,21 @@ export function statusColor(status: string): string {
   }
 }
 
-export function formatTriggerSummary(triggers: { type: string; expression?: string; source_agent?: string; output_name?: string }[]): string {
+export function humanCron(expression: string): string {
+  try {
+    return cronstrue.toString(expression, { use24HourTimeFormat: false });
+  } catch {
+    return expression;
+  }
+}
+
+export function formatTriggerSummary(triggers: { type: string; expression?: string; timezone?: string; source_agent?: string; output_name?: string }[]): string {
   return triggers
     .map((t) => {
-      if (t.type === "cron") return t.expression ?? "cron";
+      if (t.type === "cron" && t.expression) {
+        const desc = humanCron(t.expression);
+        return t.timezone && t.timezone !== "UTC" ? `${desc} (${t.timezone})` : desc;
+      }
       if (t.type === "agent_output") return `when ${t.source_agent} produces ${t.output_name}`;
       return t.type;
     })
