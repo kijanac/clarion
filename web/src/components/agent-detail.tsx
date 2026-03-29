@@ -15,19 +15,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { RunDetailSheet } from "@/components/run-detail";
 import { StatusDot } from "@/components/status-dot";
 import { formatTime, formatDuration, statusColor, formatTriggerSummary } from "@/lib/format";
-import { ArrowLeftIcon, PlayIcon, PencilIcon, MoreVerticalIcon, PauseIcon, PlayCircleIcon, TrashIcon } from "lucide-react";
+import { ArrowLeftIcon, PlayIcon, PencilIcon, PauseIcon, PlayCircleIcon, TrashIcon } from "lucide-react";
 
 interface AgentDetailProps {
   agentId: string;
@@ -156,40 +149,34 @@ export function AgentDetail({ agentId, onBack, onDeleted }: AgentDetailProps) {
         {!agent.enabled && (
           <Badge variant="secondary" className="text-muted-foreground">paused</Badge>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1">
           <Button
-            variant="outline"
-            size="sm"
-            className="text-primary"
+            variant="ghost"
+            size="icon-sm"
             onClick={handleRunNow}
             disabled={runningNow || !agent.enabled}
+            title="Run now"
           >
-            <PlayIcon data-icon="inline-start" />
-            {runningNow ? "Running..." : "Run now"}
+            <PlayIcon className={runningNow ? "animate-pulse" : ""} />
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon-sm" />}
-            >
-              <MoreVerticalIcon />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleTogglePause} disabled={togglingPause}>
-                {agent.enabled
-                  ? <><PauseIcon className="mr-2 size-4" />Pause agent</>
-                  : <><PlayCircleIcon className="mr-2 size-4" />Resume agent</>
-                }
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={() => setShowDeleteConfirm(true)}
-              >
-                <TrashIcon className="mr-2 size-4" />
-                Delete agent
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={handleTogglePause}
+            disabled={togglingPause}
+            title={agent.enabled ? "Pause" : "Resume"}
+          >
+            {agent.enabled ? <PauseIcon /> : <PlayCircleIcon />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-destructive hover:text-destructive"
+            onClick={() => setShowDeleteConfirm(true)}
+            title="Delete"
+          >
+            <TrashIcon />
+          </Button>
         </div>
       </div>
 

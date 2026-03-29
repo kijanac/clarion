@@ -86,13 +86,6 @@ function TemplateGrid({
               <p className="text-xs text-muted-foreground leading-relaxed">
                 {tmpl.description}
               </p>
-              <div className="flex gap-1 flex-wrap">
-                {tmpl.tools.map((tool) => (
-                  <Badge key={tool} variant="secondary" className="text-[10px]">
-                    {tool}
-                  </Badge>
-                ))}
-              </div>
             </CardContent>
           </Card>
         </button>
@@ -247,7 +240,7 @@ export function NewAgentDialog({ open, onOpenChange, onCreated }: NewAgentDialog
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg overflow-y-auto max-h-[85vh]">
         {/* Progress bar */}
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-muted rounded-t-xl overflow-hidden">
           <div
@@ -270,7 +263,7 @@ export function NewAgentDialog({ open, onOpenChange, onCreated }: NewAgentDialog
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-[280px]">
+        <div className="min-h-[280px] min-w-0">
           {step === 1 && (
             <TemplateGrid
               templates={templates}
